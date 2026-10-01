@@ -2,76 +2,87 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>KENZO Temp Mail</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="bg-grid"></div>
-  <div class="bg-glow"></div>
+  <!-- HEADER -->
+  <header class="app-header">
+    <button class="icon-btn" id="btnMenu">☰</button>
+    <h1 id="headerTitle">Email</h1>
+    <button class="icon-btn" id="btnRefreshTop">🔄</button>
+  </header>
 
-  <div class="container">
-    <header class="hero">
-      <div class="logo">
-        <span class="logo-icon">⚡</span>
-        <h1>OXY<span>TEMPMAIL</span></h1>
+  <!-- PAGE: EMAIL -->
+  <main id="pageEmail" class="page active">
+    <div class="envelope-card">
+      <div class="envelope-icon">📧</div>
+      <h2 id="emailDisplay">—</h2>
+      <p class="subtitle">Alamat Email sementara Anda</p>
+      <button class="btn-copy" id="btnCopy">📋 Salin email</button>
+    </div>
+
+    <button class="btn-change" id="btnChange">🔃 Ubah</button>
+
+    <p id="statusEmail" class="status"></p>
+  </main>
+
+  <!-- PAGE: INBOX -->
+  <main id="pageInbox" class="page">
+    <div class="inbox-header">
+      <select id="accountSelect" class="account-select">
+        <option>—</option>
+      </select>
+      <span id="inboxCountBadge" class="count-badge">0</span>
+    </div>
+
+    <div id="inboxList" class="inbox-list">
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <p>Kotak masuk kosong</p>
+        <span>Email yang masuk bakal muncul di sini</span>
       </div>
-      <p class="tagline">Email sementara. Gratis. Tanpa daftar. Tanpa jejak.</p>
-    </header>
+    </div>
+  </main>
 
-    <section class="card main-card">
-      <div class="card-header">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-        <span class="card-title">~/generator</span>
+  <!-- PAGE: KELOLA -->
+  <main id="pageManage" class="page">
+    <div class="manage-card">
+      <h3>⚙️ Pengaturan</h3>
+      <div class="manage-item">
+        <span>Auto refresh</span>
+        <span class="value">5 detik</span>
       </div>
-
-      <div class="card-body">
-        <button id="btnGenerate" class="btn-primary">
-          <span class="btn-icon">✦</span>
-          GENERATE EMAIL BARU
-        </button>
-
-        <div id="emailBox" class="email-box hidden">
-          <div class="email-display">
-            <span class="label">EMAIL LU</span>
-            <input type="text" id="emailAddr" readonly>
-          </div>
-          <div class="email-actions">
-            <button id="btnCopy" class="btn-ghost">📋 Copy</button>
-            <button id="btnRefresh" class="btn-ghost">🔄 Refresh</button>
-          </div>
-        </div>
-
-        <p id="status" class="status"></p>
+      <div class="manage-item">
+        <span>Penyimpanan</span>
+        <span class="value">Tidak ada</span>
       </div>
-    </section>
-
-    <section class="card inbox-card">
-      <div class="card-header">
-        <span class="dot red"></span>
-        <span class="dot yellow"></span>
-        <span class="dot green"></span>
-        <span class="card-title">~/inbox</span>
-        <span id="inboxCount" class="badge">0</span>
+      <div class="manage-item">
+        <span>Domain aktif</span>
+        <span class="value" id="activeDomain">—</span>
       </div>
+    </div>
 
-      <div id="inbox" class="inbox">
-        <div class="empty-state">
-          <div class="empty-icon">📭</div>
-          <p>Belum ada email masuk</p>
-          <span>Generate email dulu buat mulai</span>
-        </div>
-      </div>
-    </section>
+    <button class="btn-danger" id="btnDeleteAll">🗑️ Hapus & ganti akun</button>
+  </main>
 
-    <footer class="footer">
-      <p>Powered by <span>mail.tm</span> · Built by <span>OXY</span></p>
-    </footer>
-  </div>
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-page="pageEmail">
+      <span class="nav-icon">✉️</span>
+      <span>Email</span>
+    </button>
+    <button class="nav-btn" data-page="pageInbox">
+      <span class="nav-icon">📥</span>
+      <span>Kotak masuk</span>
+    </button>
+    <button class="nav-btn" data-page="pageManage">
+      <span class="nav-icon">☰</span>
+      <span>Kelola</span>
+    </button>
+  </nav>
 
   <script src="app.js"></script>
 </body>
