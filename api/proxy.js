@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'path required' });
   }
 
-  // TARGET: mail.gw
-  const target = 'https://api.mail.gw/' + path;
+  // Coba MAIL.TM dulu (target utama)
+  const target = 'https://api.mail.tm/' + path;
 
   try {
     const fetchOpts = {
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 OXY-TempMail/1.0'
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     };
 
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const upstream = await fetch(target, fetchOpts);
     const data = await upstream.text();
 
-    console.log('[PROXY] RES', upstream.status, 'len:', data.length);
+    console.log('[PROXY] RES', upstream.status, 'len:', data.length, 'preview:', data.substring(0, 150));
 
     res.status(upstream.status);
     res.setHeader('Content-Type', 'application/json');
