@@ -8,14 +8,12 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- HEADER -->
   <header class="app-header">
     <button class="icon-btn" id="btnMenu">☰</button>
     <h1 id="headerTitle">Email</h1>
     <button class="icon-btn" id="btnRefreshTop">🔄</button>
   </header>
 
-  <!-- PAGE: EMAIL -->
   <main id="pageEmail" class="page active">
     <div class="envelope-card">
       <div class="envelope-icon">📧</div>
@@ -23,13 +21,10 @@
       <p class="subtitle">Alamat Email sementara Anda</p>
       <button class="btn-copy" id="btnCopy">📋 Salin email</button>
     </div>
-
     <button class="btn-change" id="btnChange">🔃 Ubah</button>
-
     <p id="statusEmail" class="status"></p>
   </main>
 
-  <!-- PAGE: INBOX -->
   <main id="pageInbox" class="page">
     <div class="inbox-header">
       <select id="accountSelect" class="account-select">
@@ -37,7 +32,6 @@
       </select>
       <span id="inboxCountBadge" class="count-badge">0</span>
     </div>
-
     <div id="inboxList" class="inbox-list">
       <div class="empty">
         <div class="empty-icon">📭</div>
@@ -47,7 +41,6 @@
     </div>
   </main>
 
-  <!-- PAGE: KELOLA -->
   <main id="pageManage" class="page">
     <div class="manage-card">
       <h3>⚙️ Pengaturan</h3>
@@ -56,19 +49,17 @@
         <span class="value">5 detik</span>
       </div>
       <div class="manage-item">
-        <span>Penyimpanan</span>
-        <span class="value">Tidak ada</span>
+        <span>Provider</span>
+        <span class="value" id="providerName">Guerrilla Mail</span>
       </div>
       <div class="manage-item">
         <span>Domain aktif</span>
         <span class="value" id="activeDomain">—</span>
       </div>
     </div>
-
     <button class="btn-danger" id="btnDeleteAll">🗑️ Hapus & ganti akun</button>
   </main>
 
-  <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-page="pageEmail">
       <span class="nav-icon">✉️</span>
@@ -85,5 +76,8 @@
   </nav>
 
   <script src="app.js"></script>
+  <!-- ERUDA - console debug di HP. Hapus 2 baris ini kalau udah kelar debug -->
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script>
 </body>
 </html>
