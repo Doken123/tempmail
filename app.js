@@ -1,6 +1,6 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE AKUN
-// v4: username nama orang + retry token
+// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE + NOTE
+// v5: tambah note/catatan per akun
 // ============================================
 
 const API = '/proxy?path=';
@@ -34,24 +34,17 @@ let currentAccount = null;
 let refreshInterval = null;
 
 // ===== HELPER =====
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 function generateUsername() {
   const depan = NAMA_DEPAN[Math.floor(Math.random() * NAMA_DEPAN.length)];
   const belakang = NAMA_BELAKANG[Math.floor(Math.random() * NAMA_BELAKANG.length)];
   const angka = Math.floor(Math.random() * 90) + 10;
-
   const format = Math.floor(Math.random() * 3);
   let user;
-  if (format === 0) {
-    user = depan + '.' + belakang + angka;
-  } else if (format === 1) {
-    user = depan + belakang + angka;
-  } else {
-    user = depan + '.' + belakang;
-  }
+  if (format === 0) user = depan + '.' + belakang + angka;
+  else if (format === 1) user = depan + belakang + angka;
+  else user = depan + '.' + belakang;
   return user.toLowerCase().replace(/[^a-z0-9.]/g, '');
 }
 
@@ -61,7 +54,7 @@ function generatePassword() {
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('========== [OXY] APP START v4 ==========');
+  console.log('========== [OXY] APP START v5 ==========');
   setupNav();
 
   const activeEmail = localStorage.getItem(ACTIVE_KEY);
@@ -70,14 +63,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const found = accounts.find(a => a.email === activeEmail);
     if (found) {
       currentAccount = found;
-      console.log('[OXY] Load akun:', found.email);
       applyAccount();
       renderSavedList();
       startRefresh();
       return;
     }
   }
-
   renderSavedList();
   createEmail();
 });
@@ -121,7 +112,6 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // 1. Domain
     const domRes = await fetch(API + 'domains');
     const domText = await domRes.text();
     let domData;
@@ -129,37 +119,29 @@ async function createEmail() {
     let domains = Array.isArray(domData) ? domData : (domData['hydra:member'] || []);
     if (!domains.length) throw new Error('Ga ada domain');
     const domain = domains[0].domain || domains[0].name;
-    console.log('[OXY] Domain:', domain);
 
-    // 2. Generate email + password
     const user = generateUsername();
     const email = user + '@' + domain;
     const password = generatePassword();
-    console.log('[OXY] Coba daftar:', email);
+    console.log('[OXY] Daftar:', email);
 
-    // 3. Daftar
     const accRes = await fetch(API + 'accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password: password })
     });
     const accText = await accRes.text();
-    console.log('[OXY] Daftar:', accRes.status, accText.substring(0, 150));
 
     if (accRes.status === 429) throw new Error('Rate limit (429). Tunggu 1-2 jam.');
-    if (!accRes.ok) {
-      throw new Error('Gagal daftar (' + accRes.status + '): ' + accText.substring(0, 80));
-    }
+    if (!accRes.ok) throw new Error('Gagal daftar (' + accRes.status + ')');
 
     let accData;
     try { accData = JSON.parse(accText); } catch (e) { throw new Error('Response daftar bukan JSON'); }
 
-    // 4. LOGIN DAPET TOKEN — RETRY 3x KALAU GAGAL
     let token = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      console.log('[OXY] Minta token, attempt', attempt);
-      if (attempt > 1) await sleep(1000 * attempt); // delay 2s, 3s
-      else await sleep(500); // delay awal
+      if (attempt > 1) await sleep(1000 * attempt);
+      else await sleep(500);
 
       const tokRes = await fetch(API + 'token', {
         method: 'POST',
@@ -167,34 +149,26 @@ async function createEmail() {
         body: JSON.stringify({ address: email, password: password })
       });
       const tokText = await tokRes.text();
-      console.log('[OXY] Token attempt', attempt, ':', tokRes.status, tokText.substring(0, 150));
 
       if (tokRes.ok) {
         try {
           const tokData = JSON.parse(tokText);
-          if (tokData.token) {
-            token = tokData.token;
-            console.log('[OXY] ✅ Token didapat attempt', attempt);
-            break;
-          }
-        } catch (e) { console.error('[OXY] Parse token gagal:', e); }
+          if (tokData.token) { token = tokData.token; break; }
+        } catch (e) {}
       }
     }
 
-    if (!token) throw new Error('Token gagal setelah 3x coba. Tunggu bentar, klik Ubah lagi.');
+    if (!token) throw new Error('Token gagal. Klik Ubah lagi.');
 
     currentAccount = {
-      email: email,
-      password: password,
-      token: token,
+      email, password, token,
       id: accData.id,
-      domain: domain,
+      domain,
+      note: '',
       createdAt: Date.now()
     };
 
     localStorage.setItem(ACTIVE_KEY, email);
-    console.log('[OXY] ✅ Sukses total:', email);
-
     applyAccount();
     if (status) status.textContent = '✅ Email siap!';
     startRefresh();
@@ -204,26 +178,54 @@ async function createEmail() {
   } finally { btn.disabled = false; }
 }
 
-// ===== SIMPAN =====
+// ===== SIMPAN AKUN (DENGAN NOTE) =====
 function saveCurrentAccount() {
   if (!currentAccount) return;
   const status = document.getElementById('statusEmail');
   const accounts = getAccounts();
   const existing = accounts.findIndex(a => a.email === currentAccount.email);
+
+  // Tanya note kalau akun baru
+  if (existing < 0) {
+    const note = prompt('Kasih note buat akun ini (opsional):', '');
+    if (note !== null) currentAccount.note = note.trim();
+  }
+
   if (existing >= 0) {
-    accounts[existing] = currentAccount;
+    accounts[existing] = { ...accounts[existing], ...currentAccount };
     if (status) status.textContent = '💾 Akun diupdate!';
   } else {
     accounts.push(currentAccount);
     if (status) status.textContent = '💾 Akun disimpan!';
   }
+
   saveAccounts(accounts);
   localStorage.setItem(ACTIVE_KEY, currentAccount.email);
   renderSavedList();
   setTimeout(() => { if (status) status.textContent = ''; }, 2000);
 }
 
-// ===== RENDER =====
+// ===== EDIT NOTE =====
+function editNote(email) {
+  const accounts = getAccounts();
+  const acc = accounts.find(a => a.email === email);
+  if (!acc) return;
+
+  const newNote = prompt('Edit note buat ' + email + ':', acc.note || '');
+  if (newNote === null) return; // cancel
+
+  acc.note = newNote.trim();
+  saveAccounts(accounts);
+
+  // Update currentAccount kalau yang diedit = aktif
+  if (currentAccount && currentAccount.email === email) {
+    currentAccount.note = acc.note;
+  }
+
+  renderSavedList();
+}
+
+// ===== RENDER DAFTAR =====
 function renderSavedList() {
   const list = document.getElementById('savedList');
   if (!list) return;
@@ -238,13 +240,19 @@ function renderSavedList() {
 
   list.innerHTML = accounts.map(a => {
     const isActive = currentAccount && currentAccount.email === a.email;
+    const noteHtml = a.note
+      ? '<div class="saved-item-note">📝 ' + escapeHtml(a.note) + '</div>'
+      : '<div class="saved-item-note empty-note">Belum ada note — tap ✏️ buat nambah</div>';
+
     return '<div class="saved-item ' + (isActive ? 'active' : '') + '" onclick="switchAccount(\'' + a.email + '\')">' +
       '<div class="saved-item-info">' +
         '<div class="saved-item-email">' + escapeHtml(a.email) + '</div>' +
+        noteHtml +
         '<div class="saved-item-meta">' + new Date(a.createdAt || Date.now()).toLocaleString('id-ID') + '</div>' +
       '</div>' +
       (isActive ? '<span class="saved-item-badge">AKTIF</span>' : '') +
       '<div class="saved-item-actions" onclick="event.stopPropagation()">' +
+        '<button class="icon-action edit" onclick="editNote(\'' + a.email + '\')">✏️</button>' +
         '<button class="icon-action" onclick="deleteAccount(\'' + a.email + '\')">🗑️</button>' +
       '</div>' +
     '</div>';
