@@ -1,22 +1,38 @@
 // ============================================
-// OXY TEMPMAIL - SIMPLE FIX v3
-// Generate langsung, ga ada async ribet
+// OXY TEMPMAIL - v4 (Persistent Email)
+// Email tetep sama walau refresh, cuma ganti pas klik "Ubah"
 // ============================================
 
 const API = 'https://www.1secmail.com/api/v1/';
 const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org', 'esiix.com', 'xojxe.com', 'yoggm.com', 'tanks7.com', 'dto1.com', 'wwjmp.com'];
+const STORAGE_KEY = 'oxy_tempmail_account';
 
 let currentAccount = null;
 let refreshInterval = null;
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('[OXY] DOM loaded, mulai setup');
+  console.log('[OXY] DOM loaded');
   setupNav();
-  // Delay dikit biar DOM stabil
-  setTimeout(() => {
+
+  // Cek localStorage dulu — kalau ada akun lama, pakai itu
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      currentAccount = JSON.parse(saved);
+      console.log('[OXY] Load dari storage:', currentAccount);
+      applyAccount();
+      // Langsung sync inbox
+      if (refreshInterval) clearInterval(refreshInterval);
+      refreshInterval = setInterval(loadInbox, 5000);
+      setTimeout(loadInbox, 500);
+    } catch (e) {
+      console.error('[OXY] Storage rusak, bikin baru');
+      createEmail();
+    }
+  } else {
     createEmail();
-  }, 100);
+  }
 });
 
 // ===== NAVIGASI =====
@@ -55,19 +71,10 @@ function setupNav() {
   if (btnDelete) btnDelete.onclick = changeEmail;
 }
 
-// ===== BIKIN EMAIL BARU (SIMPLE, GA PAKE ASYNC) =====
+// ===== BIKIN EMAIL BARU =====
 function createEmail() {
   console.log('[OXY] createEmail dipanggil');
-
   try {
-    const status = document.getElementById('statusEmail');
-    const display = document.getElementById('emailDisplay');
-
-    if (!display) {
-      console.error('[OXY] Element emailDisplay ga ketemu!');
-      return;
-    }
-
     const user = Math.random().toString(36).substring(2, 12).toLowerCase();
     const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
     const email = user + '@' + domain;
@@ -75,10 +82,12 @@ function createEmail() {
     currentAccount = { email, user, domain };
     console.log('[OXY] Akun baru:', currentAccount);
 
-    display.textContent = email;
-    document.getElementById('activeDomain').textContent = domain;
-    document.getElementById('accountSelect').innerHTML = '<option>' + email + '</option>';
+    // SIMPEN KE LOCALSTORAGE
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
 
+    applyAccount();
+
+    const status = document.getElementById('statusEmail');
     if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
 
     if (refreshInterval) clearInterval(refreshInterval);
@@ -91,6 +100,14 @@ function createEmail() {
   }
 }
 
+// ===== TAMPILIN AKUN KE UI =====
+function applyAccount() {
+  if (!currentAccount) return;
+  document.getElementById('emailDisplay').textContent = currentAccount.email;
+  document.getElementById('activeDomain').textContent = currentAccount.domain;
+  document.getElementById('accountSelect').innerHTML = '<option>' + currentAccount.email + '</option>';
+}
+
 // ===== LOAD INBOX =====
 async function loadInbox() {
   if (!currentAccount) return;
@@ -99,11 +116,9 @@ async function loadInbox() {
 
   try {
     const url = API + '?action=getMessages&login=' + encodeURIComponent(currentAccount.user) + '&domain=' + encodeURIComponent(currentAccount.domain);
-    console.log('[OXY] Fetch:', url);
-
     const res = await fetch(url);
     const msgs = await res.json();
-    console.log('[OXY] Hasil:', msgs);
+    console.log('[OXY] Inbox:', msgs.length, 'email');
 
     badge.textContent = msgs.length || 0;
 
@@ -172,13 +187,18 @@ function copyEmail() {
   setTimeout(() => s.textContent = '', 2000);
 }
 
+// ===== GANTI EMAIL (CUMA KALAU KLIK UBAH) =====
 function changeEmail() {
   if (refreshInterval) clearInterval(refreshInterval);
+  // Hapus dari storage
+  localStorage.removeItem(STORAGE_KEY);
   currentAccount = null;
+
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
   document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
   document.getElementById('inboxCountBadge').textContent = '0';
+
   createEmail();
 }
 
