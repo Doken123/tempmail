@@ -1,6 +1,5 @@
 // ============================================
-// OXY TEMPMAIL - GUERILLA MAIL VERSION
-// Ga butuh proxy, CORS-friendly, langsung jalan
+// OXY TEMPMAIL - GUERRILLA MAIL (FULL DEBUG)
 // ============================================
 
 const API = 'https://api.guerrillamail.com/ajax.php';
@@ -10,9 +9,10 @@ let currentAccount = null;
 let refreshInterval = null;
 let sidToken = null;
 
-// ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('[OXY] DOM loaded - guerrilla version');
+  console.log('========== [OXY] APP START ==========');
+  console.log('[OXY] Guerrilla Mail version');
+
   setupNav();
 
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -25,7 +25,7 @@ window.addEventListener('DOMContentLoaded', () => {
       applyAccount();
       startRefresh();
     } catch (e) {
-      console.error('[OXY] Storage rusak');
+      console.error('[OXY] Storage rusak:', e);
       createEmail();
     }
   } else {
@@ -33,7 +33,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ===== NAV =====
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.onclick = () => {
@@ -47,11 +46,10 @@ function setupNav() {
     };
   });
 
-  document.getElementById('btnMenu').onclick = () => {
-    document.querySelector('[data-page="pageManage"]').click();
-  };
+  document.getElementById('btnMenu').onclick = () => document.querySelector('[data-page="pageManage"]').click();
 
   document.getElementById('btnRefreshTop').onclick = () => {
+    console.log('[OXY] Manual refresh');
     loadInbox();
     const s = document.getElementById('statusEmail');
     s.textContent = '🔄 Refresh...';
@@ -63,7 +61,6 @@ function setupNav() {
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
-// ===== BIKIN EMAIL BARU =====
 async function createEmail() {
   const status = document.getElementById('statusEmail');
   const btn = document.getElementById('btnCopy');
@@ -71,12 +68,16 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // Guerrilla Mail: minta email baru
-    const res = await fetch(API + '?f=get_email_address&lang=id&ip=127.0.0.1&agent=oxy');
-    const data = await res.json();
-    console.log('[OXY] Guerrilla response:', data);
+    const url = API + '?f=get_email_address&lang=id&agent=oxy-tempmail';
+    console.log('[OXY] Fetch URL:', url);
 
-    if (!data.email_addr) throw new Error('Ga dapet email dari Guerrilla');
+    const res = await fetch(url);
+    console.log('[OXY] Response status:', res.status);
+
+    const data = await res.json();
+    console.log('[OXY] Response data:', data);
+
+    if (!data.email_addr) throw new Error('Ga dapet email');
 
     currentAccount = {
       email: data.email_addr,
@@ -85,7 +86,7 @@ async function createEmail() {
     sidToken = data.sid_token;
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
-    console.log('[OXY] Email:', currentAccount.email);
+    console.log('[OXY] ✅ Email baru:', currentAccount.email);
 
     applyAccount();
     if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
@@ -93,14 +94,13 @@ async function createEmail() {
     startRefresh();
 
   } catch (e) {
-    console.error('[OXY] Error:', e);
+    console.error('[OXY] ❌ Error createEmail:', e);
     if (status) status.textContent = '❌ ' + e.message;
   } finally {
     btn.disabled = false;
   }
 }
 
-// ===== TAMPILIN AKUN =====
 function applyAccount() {
   if (!currentAccount) return;
   const email = currentAccount.email;
@@ -110,7 +110,6 @@ function applyAccount() {
   document.getElementById('accountSelect').innerHTML = '<option>' + email + '</option>';
 }
 
-// ===== REFRESH INBOX =====
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
@@ -126,15 +125,18 @@ async function loadInbox() {
     const url = API + '?f=check_email&seq=0&sid_token=' + encodeURIComponent(sidToken);
     const res = await fetch(url);
     const data = await res.json();
-    console.log('[OXY] Inbox data:', data);
 
     const msgs = data.list || [];
+    console.log('[OXY] 📥 Inbox count:', msgs.length);
+
     badge.textContent = msgs.length;
 
     if (msgs.length === 0) {
       inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
       return;
     }
+
+    msgs.forEach(m => console.log('[OXY] 📧 Mail:', m.mail_from, '-', m.mail_subject));
 
     inbox.innerHTML = msgs.map(m => {
       const subj = m.mail_subject || '';
@@ -153,17 +155,16 @@ async function loadInbox() {
     }).join('');
 
   } catch (e) {
-    console.error('[OXY] Error loadInbox:', e);
+    console.error('[OXY] ❌ Error loadInbox:', e);
   }
 }
 
-// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
     const url = API + '?f=fetch_email&email_id=' + id + '&sid_token=' + encodeURIComponent(sidToken);
     const res = await fetch(url);
     const msg = await res.json();
-    console.log('[OXY] Email detail:', msg);
+    console.log('[OXY] 📨 Email detail:', msg);
 
     const body = msg.mail_body || '(kosong)';
     const from = msg.mail_from || 'Unknown';
@@ -180,11 +181,11 @@ async function bacaEmail(id) {
     '</div>';
     document.body.appendChild(modal);
   } catch (e) {
+    console.error('[OXY] Error bacaEmail:', e);
     alert('Gagal baca: ' + e.message);
   }
 }
 
-// ===== UTIL =====
 function copyEmail() {
   if (!currentAccount) return;
   navigator.clipboard.writeText(currentAccount.email);
@@ -194,6 +195,7 @@ function copyEmail() {
 }
 
 function changeEmail() {
+  console.log('[OXY] Ganti email...');
   if (refreshInterval) clearInterval(refreshInterval);
   localStorage.removeItem(STORAGE_KEY);
   currentAccount = null;
