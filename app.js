@@ -1,25 +1,39 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM VIA PROXY
+// OXY TEMPMAIL - GUERILLA MAIL VERSION
+// Ga butuh proxy, CORS-friendly, langsung jalan
 // ============================================
 
-const API = '/api/proxy?path=';
-const STORAGE_KEY = 'oxy_mailtm_account';
+const API = 'https://api.guerrillamail.com/ajax.php';
+const STORAGE_KEY = 'oxy_guerrilla_account';
 
 let currentAccount = null;
 let refreshInterval = null;
+let sidToken = null;
 
+// ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
+  console.log('[OXY] DOM loaded - guerrilla version');
   setupNav();
+
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      currentAccount = JSON.parse(saved);
+      const acc = JSON.parse(saved);
+      currentAccount = acc;
+      sidToken = acc.sid_token;
+      console.log('[OXY] Load akun lama:', acc.email);
       applyAccount();
       startRefresh();
-    } catch (e) { createEmail(); }
-  } else { createEmail(); }
+    } catch (e) {
+      console.error('[OXY] Storage rusak');
+      createEmail();
+    }
+  } else {
+    createEmail();
+  }
 });
 
+// ===== NAV =====
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.onclick = () => {
@@ -32,130 +46,145 @@ function setupNav() {
       document.getElementById('headerTitle').textContent = titles[pageId];
     };
   });
-  document.getElementById('btnMenu').onclick = () => document.querySelector('[data-page="pageManage"]').click();
+
+  document.getElementById('btnMenu').onclick = () => {
+    document.querySelector('[data-page="pageManage"]').click();
+  };
+
   document.getElementById('btnRefreshTop').onclick = () => {
     loadInbox();
     const s = document.getElementById('statusEmail');
     s.textContent = '🔄 Refresh...';
     setTimeout(() => s.textContent = '', 1500);
   };
+
   document.getElementById('btnCopy').onclick = copyEmail;
   document.getElementById('btnChange').onclick = changeEmail;
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
+// ===== BIKIN EMAIL BARU =====
 async function createEmail() {
   const status = document.getElementById('statusEmail');
   const btn = document.getElementById('btnCopy');
   btn.disabled = true;
   if (status) status.textContent = '⏳ Bikin email...';
+
   try {
-    const domRes = await fetch(API + 'domains');
-    const domData = await domRes.json();
-    const domains = domData['hydra:member'] || [];
-    if (!domains.length) throw new Error('Ga ada domain');
-    const domain = domains[0].domain;
-    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
-    const email = user + '@' + domain;
-    const password = Math.random().toString(36).substring(2, 16);
+    // Guerrilla Mail: minta email baru
+    const res = await fetch(API + '?f=get_email_address&lang=id&ip=127.0.0.1&agent=oxy');
+    const data = await res.json();
+    console.log('[OXY] Guerrilla response:', data);
 
-    const accRes = await fetch(API + 'accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-    if (!accRes.ok) throw new Error('Gagal daftar');
-    const accData = await accRes.json();
+    if (!data.email_addr) throw new Error('Ga dapet email dari Guerrilla');
 
-    const tokRes = await fetch(API + 'token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-    const tokData = await tokRes.json();
+    currentAccount = {
+      email: data.email_addr,
+      sid_token: data.sid_token
+    };
+    sidToken = data.sid_token;
 
-    currentAccount = { email, password, token: tokData.token, id: accData.id, domain };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
+    console.log('[OXY] Email:', currentAccount.email);
+
     applyAccount();
-    if (status) status.textContent = '✅ Email siap!';
+    if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
+
     startRefresh();
+
   } catch (e) {
-    console.error(e);
-    if (status) status.textContent = '❌ Error: ' + e.message;
-  } finally { btn.disabled = false; }
+    console.error('[OXY] Error:', e);
+    if (status) status.textContent = '❌ ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
+// ===== TAMPILIN AKUN =====
 function applyAccount() {
   if (!currentAccount) return;
-  document.getElementById('emailDisplay').textContent = currentAccount.email;
-  document.getElementById('activeDomain').textContent = currentAccount.domain || '-';
-  document.getElementById('accountSelect').innerHTML = '<option>' + currentAccount.email + '</option>';
+  const email = currentAccount.email;
+  const domain = email.split('@')[1] || '-';
+  document.getElementById('emailDisplay').textContent = email;
+  document.getElementById('activeDomain').textContent = domain;
+  document.getElementById('accountSelect').innerHTML = '<option>' + email + '</option>';
 }
 
+// ===== REFRESH INBOX =====
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
-  setTimeout(loadInbox, 1000);
+  setTimeout(loadInbox, 1500);
 }
 
 async function loadInbox() {
-  if (!currentAccount) return;
+  if (!currentAccount || !sidToken) return;
   const inbox = document.getElementById('inboxList');
   const badge = document.getElementById('inboxCountBadge');
+
   try {
-    const res = await fetch(API + 'messages', { headers: { 'Authorization': 'Bearer ' + currentAccount.token } });
-    if (res.status === 401) {
-      localStorage.removeItem(STORAGE_KEY);
-      createEmail(); return;
-    }
+    const url = API + '?f=check_email&seq=0&sid_token=' + encodeURIComponent(sidToken);
+    const res = await fetch(url);
     const data = await res.json();
-    const msgs = data['hydra:member'] || [];
+    console.log('[OXY] Inbox data:', data);
+
+    const msgs = data.list || [];
     badge.textContent = msgs.length;
 
-    if (!msgs.length) {
+    if (msgs.length === 0) {
       inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
       return;
     }
 
     inbox.innerHTML = msgs.map(m => {
-      const subj = m.subject || '';
-      const from = (m.from && m.from.address) ? m.from.address : 'Unknown';
+      const subj = m.mail_subject || '';
+      const from = m.mail_from || 'Unknown';
       const codeMatch = subj.match(/\b\d{4,8}\b/);
       const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : subj;
-      return '<div class="mail-item" onclick="bacaEmail(\'' + m.id + '\')">' +
-        '<div class="mail-top"><div class="mail-from">' + escapeHtml(from) + '</div>' +
-        '<div class="mail-date">' + new Date(m.createdAt).toLocaleString('id-ID') + '</div></div>' +
+
+      return '<div class="mail-item" onclick="bacaEmail(\'' + m.mail_id + '\')">' +
+        '<div class="mail-top">' +
+          '<div class="mail-from">' + escapeHtml(from) + '</div>' +
+          '<div class="mail-date">' + escapeHtml(m.mail_date || '') + '</div>' +
+        '</div>' +
         '<div class="mail-subject">' + escapeHtml(subj || '(tanpa subjek)') + '</div>' +
-        '<div class="mail-preview">' + preview + '</div></div>';
+        '<div class="mail-preview">' + preview + '</div>' +
+      '</div>';
     }).join('');
-  } catch (e) { console.error(e); }
+
+  } catch (e) {
+    console.error('[OXY] Error loadInbox:', e);
+  }
 }
 
+// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
-    const res = await fetch(API + 'messages/' + id, { headers: { 'Authorization': 'Bearer ' + currentAccount.token } });
+    const url = API + '?f=fetch_email&email_id=' + id + '&sid_token=' + encodeURIComponent(sidToken);
+    const res = await fetch(url);
     const msg = await res.json();
-    const body = msg.text || (msg.html ? stripHtml(msg.html.join('')) : '') || '(kosong)';
-    const from = (msg.from && msg.from.address) ? msg.from.address : 'Unknown';
+    console.log('[OXY] Email detail:', msg);
+
+    const body = msg.mail_body || '(kosong)';
+    const from = msg.mail_from || 'Unknown';
+
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = '<div class="modal-content"><div class="modal-handle"></div>' +
-      '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
+    modal.innerHTML = '<div class="modal-content">' +
+      '<div class="modal-handle"></div>' +
+      '<h3>' + escapeHtml(msg.mail_subject || '(tanpa subjek)') + '</h3>' +
       '<div class="modal-meta">Dari: ' + escapeHtml(from) + '</div>' +
       '<div class="modal-body">' + escapeHtml(body) + '</div>' +
-      '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button></div>';
+      '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button>' +
+    '</div>';
     document.body.appendChild(modal);
-  } catch (e) { alert('Gagal: ' + e.message); }
+  } catch (e) {
+    alert('Gagal baca: ' + e.message);
+  }
 }
 
-function stripHtml(html) {
-  if (!html) return '';
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || '';
-}
-
+// ===== UTIL =====
 function copyEmail() {
   if (!currentAccount) return;
   navigator.clipboard.writeText(currentAccount.email);
@@ -168,13 +197,18 @@ function changeEmail() {
   if (refreshInterval) clearInterval(refreshInterval);
   localStorage.removeItem(STORAGE_KEY);
   currentAccount = null;
+  sidToken = null;
+
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
   document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
   document.getElementById('inboxCountBadge').textContent = '0';
+
   createEmail();
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
 }
