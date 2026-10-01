@@ -1,9 +1,13 @@
 // ============================================
-// OXY TEMPMAIL - TEMPMAIL.LOL VIA PROXY
+// OXY TEMPMAIL - 1SECMAIL FINAL
+// Ga butuh proxy, langsung, domain reliable
 // ============================================
 
-const API = '/api/proxy?path=';
-const STORAGE_KEY = 'oxy_tempmail_lol';
+const API = 'https://www.1secmail.com/api/v1/';
+const STORAGE_KEY = 'oxy_1secmail_account';
+
+// Domain paling reliable (urut dari yang sering idup)
+const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org'];
 
 let currentAccount = null;
 let refreshInterval = null;
@@ -57,29 +61,23 @@ function setupNav() {
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
-async function createEmail() {
+function createEmail() {
   const status = document.getElementById('statusEmail');
   const btn = document.getElementById('btnCopy');
   btn.disabled = true;
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    const res = await fetch(API + 'generate');
-    const data = await res.json();
-    console.log('[OXY] Generate response:', data);
+    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
+    const domain = DOMAINS[0]; // Pake 1secmail.com, paling reliable
+    const email = user + '@' + domain;
 
-    if (!data.address || !data.token) throw new Error('Ga dapet email dari server');
-
-    currentAccount = {
-      email: data.address,
-      token: data.token,
-      domain: data.address.split('@')[1] || '-'
-    };
+    currentAccount = { email, user, domain };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
     console.log('[OXY] ✅ Email:', currentAccount.email);
 
     applyAccount();
-    if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
+    if (status) status.textContent = '✅ Email siap! Tunggu kode 1-5 menit...';
 
     startRefresh();
 
@@ -100,37 +98,38 @@ function applyAccount() {
 
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
-  refreshInterval = setInterval(loadInbox, 5000);
-  setTimeout(loadInbox, 1500);
+  // Polling 15 detik — biar ga kena rate limit
+  refreshInterval = setInterval(loadInbox, 15000);
+  setTimeout(loadInbox, 3000);
 }
 
 async function loadInbox() {
-  if (!currentAccount || !currentAccount.token) return;
+  if (!currentAccount) return;
   const inbox = document.getElementById('inboxList');
   const badge = document.getElementById('inboxCountBadge');
 
   try {
-    const res = await fetch(API + 'auth/' + currentAccount.token);
-    const data = await res.json();
-    console.log('[OXY] Inbox response:', data);
+    const url = API + '?action=getMessages&login=' + encodeURIComponent(currentAccount.user) + '&domain=' + encodeURIComponent(currentAccount.domain);
+    console.log('[OXY] Fetch:', url);
 
-    const msgs = data.email || data.emails || [];
-    badge.textContent = msgs.length;
+    const res = await fetch(url);
+    const msgs = await res.json();
+    console.log('[OXY] 📥 Inbox:', msgs);
 
-    if (!msgs.length) {
-      inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
+    badge.textContent = Array.isArray(msgs) ? msgs.length : 0;
+
+    if (!Array.isArray(msgs) || msgs.length === 0) {
+      inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Kode biasanya masuk 1-5 menit. Sabar...</span></div>';
       return;
     }
 
-    msgs.forEach(m => console.log('[OXY] 📧', m.from, '-', m.subject));
-
-    inbox.innerHTML = msgs.map((m, i) => {
+    inbox.innerHTML = msgs.map(m => {
       const subj = m.subject || '';
       const from = m.from || 'Unknown';
       const codeMatch = subj.match(/\b\d{4,8}\b/);
-      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : (m.body || '').substring(0, 60);
+      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : subj;
 
-      return '<div class="mail-item" onclick="bacaEmail(' + i + ')">' +
+      return '<div class="mail-item" onclick="bacaEmail(' + m.id + ')">' +
         '<div class="mail-top">' +
           '<div class="mail-from">' + escapeHtml(from) + '</div>' +
           '<div class="mail-date">' + escapeHtml(m.date || '') + '</div>' +
@@ -140,28 +139,25 @@ async function loadInbox() {
       '</div>';
     }).join('');
 
-    // Simpen list buat dibaca detail
-    window.__currentMails = msgs;
-
   } catch (e) {
     console.error('[OXY] ❌ Error loadInbox:', e);
   }
 }
 
-async function bacaEmail(idx) {
+async function bacaEmail(id) {
   try {
-    const m = window.__currentMails && window.__currentMails[idx];
-    if (!m) throw new Error('Email ga ketemu');
-
-    const body = m.body || m.html || '(kosong)';
-    const from = m.from || 'Unknown';
+    const url = API + '?action=readMessage&login=' + encodeURIComponent(currentAccount.user) + '&domain=' + encodeURIComponent(currentAccount.domain) + '&id=' + id;
+    const res = await fetch(url);
+    const msg = await res.json();
+    const body = msg.textBody || stripHtml(msg.htmlBody) || '(kosong)';
+    const from = msg.from || 'Unknown';
 
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     modal.innerHTML = '<div class="modal-content">' +
       '<div class="modal-handle"></div>' +
-      '<h3>' + escapeHtml(m.subject || '(tanpa subjek)') + '</h3>' +
+      '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
       '<div class="modal-meta">Dari: ' + escapeHtml(from) + '</div>' +
       '<div class="modal-body">' + escapeHtml(body) + '</div>' +
       '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button>' +
@@ -171,6 +167,13 @@ async function bacaEmail(idx) {
     console.error('[OXY] Error bacaEmail:', e);
     alert('Gagal baca: ' + e.message);
   }
+}
+
+function stripHtml(html) {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
 }
 
 function copyEmail() {
@@ -189,7 +192,7 @@ function changeEmail() {
 
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
-  document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
+  document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Kode biasanya masuk 1-5 menit. Sabar...</span></div>';
   document.getElementById('inboxCountBadge').textContent = '0';
 
   createEmail();
