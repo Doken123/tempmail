@@ -1,10 +1,10 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM via Cloudflare Pages Function
-// API: /proxy?path=  (folder functions/proxy.js)
+// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE AKUN
 // ============================================
 
 const API = '/proxy?path=';
-const STORAGE_KEY = 'oxy_mailtm_cf';
+const STORAGE_KEY = 'oxy_mailtm_accounts';  // array akun tersimpan
+const ACTIVE_KEY = 'oxy_mailtm_active';      // email akun aktif
 
 let currentAccount = null;
 let refreshInterval = null;
@@ -14,22 +14,36 @@ window.addEventListener('DOMContentLoaded', () => {
   console.log('========== [OXY] APP START ==========');
   setupNav();
 
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      const acc = JSON.parse(saved);
-      currentAccount = acc;
-      console.log('[OXY] Load akun lama:', acc.email);
+  // Cek akun aktif
+  const activeEmail = localStorage.getItem(ACTIVE_KEY);
+  const accounts = getAccounts();
+  if (activeEmail) {
+    const found = accounts.find(a => a.email === activeEmail);
+    if (found) {
+      currentAccount = found;
+      console.log('[OXY] Load akun aktif:', found.email);
       applyAccount();
+      renderSavedList();
       startRefresh();
-    } catch (e) {
-      console.error('[OXY] Storage rusak:', e);
-      createEmail();
+      return;
     }
-  } else {
-    createEmail();
   }
+
+  // Kalau ga ada akun aktif, bikin baru
+  renderSavedList();
+  createEmail();
 });
+
+// ===== STORAGE HELPERS =====
+function getAccounts() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch (e) { return []; }
+}
+
+function saveAccounts(accounts) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+}
 
 // ===== NAV =====
 function setupNav() {
@@ -40,17 +54,17 @@ function setupNav() {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(pageId).classList.add('active');
       btn.classList.add('active');
-      const titles = { pageEmail: 'Email', pageInbox: 'Kotak masuk', pageManage: 'Kelola' };
+      const titles = { pageEmail: 'Email', pageInbox: 'Kotak masuk', pageSaved: 'Tersimpan', pageManage: 'Kelola' };
       document.getElementById('headerTitle').textContent = titles[pageId];
+
+      if (pageId === 'pageSaved') renderSavedList();
+      if (pageId === 'pageInbox') loadInbox();
     };
   });
 
-  document.getElementById('btnMenu').onclick = () => {
-    document.querySelector('[data-page="pageManage"]').click();
-  };
+  document.getElementById('btnMenu').onclick = () => document.querySelector('[data-page="pageManage"]').click();
 
   document.getElementById('btnRefreshTop').onclick = () => {
-    console.log('[OXY] Manual refresh');
     loadInbox();
     const s = document.getElementById('statusEmail');
     s.textContent = '🔄 Refresh...';
@@ -59,6 +73,7 @@ function setupNav() {
 
   document.getElementById('btnCopy').onclick = copyEmail;
   document.getElementById('btnChange').onclick = changeEmail;
+  document.getElementById('btnSave').onclick = saveCurrentAccount;
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
@@ -70,44 +85,24 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // 1. Ambil domain aktif — handle 2 format (array langsung & hydra:member)
     const domRes = await fetch(API + 'domains');
     const domData = await domRes.json();
-    console.log('[OXY] Raw domains:', domData);
-
-    let domains = [];
-    if (Array.isArray(domData)) {
-      domains = domData;
-    } else if (domData['hydra:member'] && Array.isArray(domData['hydra:member'])) {
-      domains = domData['hydra:member'];
-    } else if (domData.domains && Array.isArray(domData.domains)) {
-      domains = domData.domains;
-    }
-
+    let domains = Array.isArray(domData) ? domData : (domData['hydra:member'] || []);
     if (!domains.length) throw new Error('Ga ada domain aktif');
-    const domain = domains[0].domain || domains[0].name;
-    if (!domain) throw new Error('Domain ga valid: ' + JSON.stringify(domains[0]));
-    console.log('[OXY] Domain:', domain);
+    const domain = domains[0].domain;
 
-    // 2. Generate user & password
     const user = Math.random().toString(36).substring(2, 12).toLowerCase();
     const email = user + '@' + domain;
     const password = Math.random().toString(36).substring(2, 16);
 
-    // 3. Daftar akun
     const accRes = await fetch(API + 'accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password })
     });
-    if (!accRes.ok) {
-      const err = await accRes.text();
-      throw new Error('Gagal daftar: ' + err.substring(0, 80));
-    }
+    if (!accRes.ok) throw new Error('Gagal daftar');
     const accData = await accRes.json();
-    console.log('[OXY] ✅ Akun:', email);
 
-    // 4. Login dapet token
     const tokRes = await fetch(API + 'token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,28 +110,111 @@ async function createEmail() {
     });
     const tokData = await tokRes.json();
     if (!tokData.token) throw new Error('Token gagal');
-    console.log('[OXY] ✅ Token OK');
 
     currentAccount = {
       email: email,
       password: password,
       token: tokData.token,
       id: accData.id,
-      domain: domain
+      domain: domain,
+      createdAt: Date.now()
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
+
+    // Simpen sebagai akun aktif (belum masuk list sampai di-save)
+    localStorage.setItem(ACTIVE_KEY, email);
+    console.log('[OXY] ✅ Email baru:', email);
 
     applyAccount();
     if (status) status.textContent = '✅ Email siap!';
-
     startRefresh();
-
   } catch (e) {
-    console.error('[OXY] ❌ Error:', e);
+    console.error('[OXY] ❌', e);
     if (status) status.textContent = '❌ ' + e.message;
-  } finally {
-    btn.disabled = false;
+  } finally { btn.disabled = false; }
+}
+
+// ===== SIMPAN AKUN AKTIF =====
+function saveCurrentAccount() {
+  if (!currentAccount) return;
+  const status = document.getElementById('statusEmail');
+  const accounts = getAccounts();
+
+  // Cek apakah udah ada
+  const existing = accounts.findIndex(a => a.email === currentAccount.email);
+  if (existing >= 0) {
+    accounts[existing] = currentAccount;
+    if (status) status.textContent = '💾 Akun diupdate!';
+  } else {
+    accounts.push(currentAccount);
+    if (status) status.textContent = '💾 Akun disimpan!';
   }
+
+  saveAccounts(accounts);
+  localStorage.setItem(ACTIVE_KEY, currentAccount.email);
+  renderSavedList();
+  setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+}
+
+// ===== RENDER DAFTAR TERSIMPAN =====
+function renderSavedList() {
+  const list = document.getElementById('savedList');
+  const accounts = getAccounts();
+  document.getElementById('savedCount').textContent = accounts.length;
+
+  if (!accounts.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">💾</div><p>Belum ada akun tersimpan</p><span>Klik "Simpan akun ini" di halaman Email</span></div>';
+    return;
+  }
+
+  list.innerHTML = accounts.map(a => {
+    const isActive = currentAccount && currentAccount.email === a.email;
+    return '<div class="saved-item ' + (isActive ? 'active' : '') + '" onclick="switchAccount(\'' + a.email + '\')">' +
+      '<div class="saved-item-info">' +
+        '<div class="saved-item-email">' + escapeHtml(a.email) + '</div>' +
+        '<div class="saved-item-meta">' + new Date(a.createdAt || Date.now()).toLocaleString('id-ID') + '</div>' +
+      '</div>' +
+      (isActive ? '<span class="saved-item-badge">AKTIF</span>' : '') +
+      '<div class="saved-item-actions" onclick="event.stopPropagation()">' +
+        '<button class="icon-action" onclick="deleteAccount(\'' + a.email + '\')">🗑️</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ===== GANTI AKUN =====
+function switchAccount(email) {
+  const accounts = getAccounts();
+  const found = accounts.find(a => a.email === email);
+  if (!found) return;
+
+  currentAccount = found;
+  localStorage.setItem(ACTIVE_KEY, email);
+  console.log('[OXY] Ganti ke akun:', email);
+
+  applyAccount();
+  renderSavedList();
+  startRefresh();
+
+  // Redirect ke halaman Email
+  document.querySelector('[data-page="pageEmail"]').click();
+}
+
+// ===== HAPUS AKUN DARI LIST =====
+function deleteAccount(email) {
+  if (!confirm('Hapus akun ' + email + '?')) return;
+
+  let accounts = getAccounts();
+  accounts = accounts.filter(a => a.email !== email);
+  saveAccounts(accounts);
+
+  // Kalau yang dihapus = akun aktif, generate baru
+  if (currentAccount && currentAccount.email === email) {
+    currentAccount = null;
+    localStorage.removeItem(ACTIVE_KEY);
+    createEmail();
+  }
+
+  renderSavedList();
 }
 
 // ===== TAMPILIN AKUN =====
@@ -145,6 +223,22 @@ function applyAccount() {
   document.getElementById('emailDisplay').textContent = currentAccount.email;
   document.getElementById('activeDomain').textContent = currentAccount.domain || '-';
   document.getElementById('accountSelect').innerHTML = '<option>' + currentAccount.email + '</option>';
+
+  // Update tombol save
+  const accounts = getAccounts();
+  const isSaved = accounts.some(a => a.email === currentAccount.email);
+  const btnSave = document.getElementById('btnSave');
+  if (isSaved) {
+    btnSave.textContent = '✅ Akun tersimpan (update)';
+    btnSave.disabled = true;
+    setTimeout(() => {
+      btnSave.textContent = '💾 Simpan akun ini';
+      btnSave.disabled = false;
+    }, 2000);
+  } else {
+    btnSave.textContent = '💾 Simpan akun ini';
+    btnSave.disabled = false;
+  }
 }
 
 // ===== REFRESH =====
@@ -167,18 +261,13 @@ async function loadInbox() {
 
     if (res.status === 401) {
       console.log('[OXY] Token expired');
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ACTIVE_KEY);
       createEmail();
       return;
     }
 
     const data = await res.json();
-    let msgs = [];
-    if (Array.isArray(data)) {
-      msgs = data;
-    } else if (data['hydra:member'] && Array.isArray(data['hydra:member'])) {
-      msgs = data['hydra:member'];
-    }
+    let msgs = Array.isArray(data) ? data : (data['hydra:member'] || []);
     console.log('[OXY] 📥 Inbox count:', msgs.length);
 
     badge.textContent = msgs.length;
@@ -187,8 +276,6 @@ async function loadInbox() {
       inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
       return;
     }
-
-    msgs.forEach(m => console.log('[OXY] 📧', m.from && m.from.address, '-', m.subject));
 
     inbox.innerHTML = msgs.map(m => {
       const subj = m.subject || '';
@@ -255,10 +342,10 @@ function copyEmail() {
 }
 
 function changeEmail() {
-  console.log('[OXY] Ganti email...');
+  console.log('[OXY] Bikin email baru...');
   if (refreshInterval) clearInterval(refreshInterval);
-  localStorage.removeItem(STORAGE_KEY);
   currentAccount = null;
+  localStorage.removeItem(ACTIVE_KEY);
 
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
