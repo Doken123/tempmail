@@ -1,6 +1,6 @@
 // ============================================
-// OXY TEMPMAIL - FIXED VERSION (1secmail)
-// Ganti file app.js lama lu sama ini semua
+// OXY TEMPMAIL - FIXED V2 (1secmail)
+// Fix: parsing user/domain, delay, retry, error handling
 // ============================================
 
 const API = 'https://www.1secmail.com/api/v1/';
@@ -16,19 +16,28 @@ async function generateEmail() {
   status.textContent = '⏳ Bikin email baru...';
 
   try {
-    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
+    // Username: harus lowercase, alphanumeric
+    const user = Math.random().toString(36).substring(2, 12).toLowerCase().replace(/[^a-z0-9]/g, '');
     const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
     const email = `${user}@${domain}`;
 
-    currentAccount = { email, user, domain };
+    // Simpan terpisah biar ga salah parsing
+    currentAccount = {
+      email: email,
+      user: user,      // <-- PENTING: cuma bagian sebelum @
+      domain: domain   // <-- PENTING: cuma bagian setelah @
+    };
+
+    console.log('[OXY] Akun baru:', currentAccount); // debug
 
     document.getElementById('emailAddr').value = email;
     document.getElementById('emailBox').classList.remove('hidden');
-    status.textContent = '✅ Email siap! Tunggu email masuk...';
+    status.textContent = '✅ Email siap! Tunggu 5-10 detik...';
 
     if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(loadInbox, 5000);
-    loadInbox();
+    // Refresh tiap 8 detik biar ga kena rate limit
+    refreshInterval = setInterval(loadInbox, 8000);
+    setTimeout(loadInbox, 2000);
 
   } catch (e) {
     status.textContent = '❌ Error: ' + e.message;
@@ -41,18 +50,26 @@ async function loadInbox() {
   if (!currentAccount) return;
   const inbox = document.getElementById('inbox');
   const badge = document.getElementById('inboxCount');
+  const status = document.getElementById('status');
 
   try {
-    const url = `${API}?action=getMessages&login=${currentAccount.user}&domain=${currentAccount.domain}`;
+    const url = `${API}?action=getMessages&login=${encodeURIComponent(currentAccount.user)}&domain=${encodeURIComponent(currentAccount.domain)}`;
+    console.log('[OXY] Fetch inbox:', url); // debug
+
     const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
     const msgs = await res.json();
+    console.log('[OXY] Hasil inbox:', msgs); // debug
 
     badge.textContent = msgs.length;
 
     if (msgs.length === 0) {
-      inbox.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada email masuk</p><span>Tunggu bentar...</span></div>';
+      inbox.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada email masuk</p><span>Tunggu bentar, 1secmail suka delay</span></div>';
       return;
     }
+
+    status.textContent = `📬 ${msgs.length} email masuk!`;
 
     inbox.innerHTML = msgs.map(m => {
       const initial = (m.from[0] || '?').toUpperCase();
@@ -69,13 +86,14 @@ async function loadInbox() {
     }).join('');
 
   } catch (e) {
-    console.error(e);
+    console.error('[OXY] Error inbox:', e);
+    status.textContent = '⚠️ Error ambil inbox: ' + e.message;
   }
 }
 
 async function bacaEmail(id) {
   try {
-    const url = `${API}?action=readMessage&login=${currentAccount.user}&domain=${currentAccount.domain}&id=${id}`;
+    const url = `${API}?action=readMessage&login=${encodeURIComponent(currentAccount.user)}&domain=${encodeURIComponent(currentAccount.domain)}&id=${id}`;
     const res = await fetch(url);
     const msg = await res.json();
     const body = msg.textBody || stripHtml(msg.htmlBody) || '(kosong)';
