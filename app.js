@@ -1,20 +1,22 @@
 // ============================================
-// OXY TEMPMAIL - FINAL FIX
-// Domain yang aktif & testing langsung
+// OXY TEMPMAIL - SIMPLE FIX v3
+// Generate langsung, ga ada async ribet
 // ============================================
 
 const API = 'https://www.1secmail.com/api/v1/';
-
-// Domain aktif (wwjmp.com & beberapa sering down, ini yang biasanya hidup)
-const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org', 'esiix.com', 'xojxe.com', 'yoggm.com', 'tanks7.com', 'dto1.com'];
+const DOMAINS = ['1secmail.com', '1secmail.net', '1secmail.org', 'esiix.com', 'xojxe.com', 'yoggm.com', 'tanks7.com', 'dto1.com', 'wwjmp.com'];
 
 let currentAccount = null;
 let refreshInterval = null;
 
-// ===== INIT: auto generate pas buka =====
+// ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
+  console.log('[OXY] DOM loaded, mulai setup');
   setupNav();
-  generateEmail();
+  // Delay dikit biar DOM stabil
+  setTimeout(() => {
+    createEmail();
+  }, 100);
 });
 
 // ===== NAVIGASI =====
@@ -43,45 +45,49 @@ function setupNav() {
     setTimeout(() => s.textContent = '', 1500);
   };
 
-  document.getElementById('btnRefresh').onclick = loadInbox;
-  document.getElementById('btnCopy').onclick = copyEmail;
-  document.getElementById('btnChange').onclick = changeEmail;
-  document.getElementById('btnDeleteAll').onclick = changeEmail;
+  const btnCopy = document.getElementById('btnCopy');
+  if (btnCopy) btnCopy.onclick = copyEmail;
+
+  const btnChange = document.getElementById('btnChange');
+  if (btnChange) btnChange.onclick = changeEmail;
+
+  const btnDelete = document.getElementById('btnDeleteAll');
+  if (btnDelete) btnDelete.onclick = changeEmail;
 }
 
-// ===== GENERATE EMAIL =====
-async function generateEmail() {
-  const status = document.getElementById('statusEmail');
-  const btn = document.getElementById('btnCopy');
-  btn.disabled = true;
-  status.textContent = '⏳ Bikin email...';
+// ===== BIKIN EMAIL BARU (SIMPLE, GA PAKE ASYNC) =====
+function createEmail() {
+  console.log('[OXY] createEmail dipanggil');
 
   try {
-    // Coba domain satu-satu sampai dapet yang valid
-    let email = null, user = null, domain = null;
+    const status = document.getElementById('statusEmail');
+    const display = document.getElementById('emailDisplay');
 
-    for (const d of DOMAINS) {
-      const u = Math.random().toString(36).substring(2, 12).toLowerCase();
-      const testEmail = `${u}@${d}`;
-      email = testEmail; user = u; domain = d;
-      break; // 1secmail ga butuh verifikasi, langsung pakai
+    if (!display) {
+      console.error('[OXY] Element emailDisplay ga ketemu!');
+      return;
     }
 
-    currentAccount = { email, user, domain };
-    console.log('[OXY] Akun:', currentAccount);
+    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
+    const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
+    const email = user + '@' + domain;
 
-    document.getElementById('emailDisplay').textContent = email;
+    currentAccount = { email, user, domain };
+    console.log('[OXY] Akun baru:', currentAccount);
+
+    display.textContent = email;
     document.getElementById('activeDomain').textContent = domain;
-    document.getElementById('accountSelect').innerHTML = `<option>${email}</option>`;
-    btn.disabled = false;
-    status.textContent = '✅ Email siap! Cek Kotak masuk...';
+    document.getElementById('accountSelect').innerHTML = '<option>' + email + '</option>';
+
+    if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
 
     if (refreshInterval) clearInterval(refreshInterval);
     refreshInterval = setInterval(loadInbox, 5000);
-    setTimeout(loadInbox, 1000);
+    setTimeout(loadInbox, 1500);
 
   } catch (e) {
-    status.textContent = '❌ Error: ' + e.message;
+    console.error('[OXY] Error createEmail:', e);
+    alert('Error: ' + e.message);
   }
 }
 
@@ -92,46 +98,44 @@ async function loadInbox() {
   const badge = document.getElementById('inboxCountBadge');
 
   try {
-    const url = `${API}?action=getMessages&login=${encodeURIComponent(currentAccount.user)}&domain=${encodeURIComponent(currentAccount.domain)}`;
+    const url = API + '?action=getMessages&login=' + encodeURIComponent(currentAccount.user) + '&domain=' + encodeURIComponent(currentAccount.domain);
+    console.log('[OXY] Fetch:', url);
+
     const res = await fetch(url);
     const msgs = await res.json();
-    console.log('[OXY] Inbox:', msgs);
+    console.log('[OXY] Hasil:', msgs);
 
-    badge.textContent = msgs.length;
+    badge.textContent = msgs.length || 0;
 
     if (!Array.isArray(msgs) || msgs.length === 0) {
-      inbox.innerHTML = `
-        <div class="empty">
-          <div class="empty-icon">📭</div>
-          <p>Kotak masuk kosong</p>
-          <span>Email yang masuk bakal muncul di sini</span>
-        </div>`;
+      inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
       return;
     }
 
     inbox.innerHTML = msgs.map(m => {
-      const preview = extractCode(m.subject || '') || m.subject || '';
-      return `
-        <div class="mail-item" onclick="bacaEmail(${m.id})">
-          <div class="mail-top">
-            <div class="mail-from">${escapeHtml(m.from)}</div>
-            <div class="mail-date">${escapeHtml(m.date)}</div>
-          </div>
-          <div class="mail-subject">${escapeHtml(m.subject || '(tanpa subjek)')}</div>
-          <div class="mail-preview">${escapeHtml(preview)}</div>
-        </div>
-      `;
+      const subj = m.subject || '';
+      const codeMatch = subj.match(/\b\d{4,8}\b/);
+      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : subj;
+
+      return '<div class="mail-item" onclick="bacaEmail(' + m.id + ')">' +
+        '<div class="mail-top">' +
+          '<div class="mail-from">' + escapeHtml(m.from) + '</div>' +
+          '<div class="mail-date">' + escapeHtml(m.date) + '</div>' +
+        '</div>' +
+        '<div class="mail-subject">' + escapeHtml(subj || '(tanpa subjek)') + '</div>' +
+        '<div class="mail-preview">' + preview + '</div>' +
+      '</div>';
     }).join('');
 
   } catch (e) {
-    console.error('[OXY] Error:', e);
+    console.error('[OXY] Error loadInbox:', e);
   }
 }
 
 // ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
-    const url = `${API}?action=readMessage&login=${encodeURIComponent(currentAccount.user)}&domain=${encodeURIComponent(currentAccount.domain)}&id=${id}`;
+    const url = API + '?action=readMessage&login=' + encodeURIComponent(currentAccount.user) + '&domain=' + encodeURIComponent(currentAccount.domain) + '&id=' + id;
     const res = await fetch(url);
     const msg = await res.json();
     const body = msg.textBody || stripHtml(msg.htmlBody) || '(kosong)';
@@ -139,15 +143,13 @@ async function bacaEmail(id) {
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = `
-      <div class="modal-content">
-        <div class="modal-handle"></div>
-        <h3>${escapeHtml(msg.subject || '(tanpa subjek)')}</h3>
-        <div class="modal-meta">Dari: ${escapeHtml(msg.from)}</div>
-        <div class="modal-body">${escapeHtml(body)}</div>
-        <button class="modal-close" onclick="this.closest('.modal').remove()">TUTUP</button>
-      </div>
-    `;
+    modal.innerHTML = '<div class="modal-content">' +
+      '<div class="modal-handle"></div>' +
+      '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
+      '<div class="modal-meta">Dari: ' + escapeHtml(msg.from) + '</div>' +
+      '<div class="modal-body">' + escapeHtml(body) + '</div>' +
+      '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button>' +
+    '</div>';
     document.body.appendChild(modal);
   } catch (e) {
     alert('Gagal baca email: ' + e.message);
@@ -155,12 +157,6 @@ async function bacaEmail(id) {
 }
 
 // ===== UTIL =====
-function extractCode(text) {
-  const match = text.match(/\b\d{4,8}\b/);
-  if (!match) return null;
-  return `<span class="code">${match[0]}</span>`;
-}
-
 function stripHtml(html) {
   if (!html) return '';
   const tmp = document.createElement('div');
@@ -169,9 +165,8 @@ function stripHtml(html) {
 }
 
 function copyEmail() {
-  const val = document.getElementById('emailDisplay').textContent;
-  if (val === '—') return;
-  navigator.clipboard.writeText(val);
+  if (!currentAccount) return;
+  navigator.clipboard.writeText(currentAccount.email);
   const s = document.getElementById('statusEmail');
   s.textContent = '📋 Email dicopy!';
   setTimeout(() => s.textContent = '', 2000);
@@ -182,14 +177,9 @@ function changeEmail() {
   currentAccount = null;
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
-  document.getElementById('inboxList').innerHTML = `
-    <div class="empty">
-      <div class="empty-icon">📭</div>
-      <p>Kotak masuk kosong</p>
-      <span>Email yang masuk bakal muncul di sini</span>
-    </div>`;
+  document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
   document.getElementById('inboxCountBadge').textContent = '0';
-  generateEmail();
+  createEmail();
 }
 
 function escapeHtml(s) {
