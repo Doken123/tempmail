@@ -70,14 +70,23 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // 1. Ambil domain aktif
+    // 1. Ambil domain aktif — handle 2 format (array langsung & hydra:member)
     const domRes = await fetch(API + 'domains');
     const domData = await domRes.json();
-    console.log('[OXY] Domains:', domData);
+    console.log('[OXY] Raw domains:', domData);
 
-    const domains = domData['hydra:member'] || [];
+    let domains = [];
+    if (Array.isArray(domData)) {
+      domains = domData;
+    } else if (domData['hydra:member'] && Array.isArray(domData['hydra:member'])) {
+      domains = domData['hydra:member'];
+    } else if (domData.domains && Array.isArray(domData.domains)) {
+      domains = domData.domains;
+    }
+
     if (!domains.length) throw new Error('Ga ada domain aktif');
-    const domain = domains[0].domain;
+    const domain = domains[0].domain || domains[0].name;
+    if (!domain) throw new Error('Domain ga valid: ' + JSON.stringify(domains[0]));
     console.log('[OXY] Domain:', domain);
 
     // 2. Generate user & password
@@ -106,6 +115,7 @@ async function createEmail() {
     });
     const tokData = await tokRes.json();
     if (!tokData.token) throw new Error('Token gagal');
+    console.log('[OXY] ✅ Token OK');
 
     currentAccount = {
       email: email,
@@ -163,7 +173,12 @@ async function loadInbox() {
     }
 
     const data = await res.json();
-    const msgs = data['hydra:member'] || [];
+    let msgs = [];
+    if (Array.isArray(data)) {
+      msgs = data;
+    } else if (data['hydra:member'] && Array.isArray(data['hydra:member'])) {
+      msgs = data['hydra:member'];
+    }
     console.log('[OXY] 📥 Inbox count:', msgs.length);
 
     badge.textContent = msgs.length;
