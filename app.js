@@ -1,4 +1,11 @@
-const API = 'https://api.mail.tm';
+// ============================================
+// OXY TEMPMAIL - FIXED VERSION (1secmail)
+// Ganti file app.js lama lu sama ini semua
+// ============================================
+
+const API = 'https://www.1secmail.com/api/v1/';
+const DOMAINS = ['1secmail.com', '1secmail.org', '1secmail.net', 'wwjmp.com', 'esiix.com'];
+
 let currentAccount = null;
 let refreshInterval = null;
 
@@ -9,31 +16,11 @@ async function generateEmail() {
   status.textContent = '⏳ Bikin email baru...';
 
   try {
-    const domRes = await fetch(`${API}/domains`);
-    const domData = await domRes.json();
-    const domain = domData['hydra:member'][0].domain;
-
-    const user = Math.random().toString(36).substring(2, 12);
+    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
+    const domain = DOMAINS[Math.floor(Math.random() * DOMAINS.length)];
     const email = `${user}@${domain}`;
-    const password = Math.random().toString(36).substring(2, 16);
 
-    const accRes = await fetch(`${API}/accounts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-
-    if (!accRes.ok) throw new Error('Gagal bikin akun');
-    const accData = await accRes.json();
-
-    const tokRes = await fetch(`${API}/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-    const tokData = await tokRes.json();
-
-    currentAccount = { email, password, token: tokData.token, id: accData.id };
+    currentAccount = { email, user, domain };
 
     document.getElementById('emailAddr').value = email;
     document.getElementById('emailBox').classList.remove('hidden');
@@ -56,17 +43,9 @@ async function loadInbox() {
   const badge = document.getElementById('inboxCount');
 
   try {
-    const res = await fetch(`${API}/messages`, {
-      headers: { Authorization: `Bearer ${currentAccount.token}` }
-    });
-
-    if (res.status === 401) {
-      inbox.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Token expired</p><span>Generate ulang</span></div>';
-      return;
-    }
-
-    const data = await res.json();
-    const msgs = data['hydra:member'] || [];
+    const url = `${API}?action=getMessages&login=${currentAccount.user}&domain=${currentAccount.domain}`;
+    const res = await fetch(url);
+    const msgs = await res.json();
 
     badge.textContent = msgs.length;
 
@@ -76,14 +55,14 @@ async function loadInbox() {
     }
 
     inbox.innerHTML = msgs.map(m => {
-      const initial = (m.from.address[0] || '?').toUpperCase();
+      const initial = (m.from[0] || '?').toUpperCase();
       return `
-        <div class="mail-item" onclick="bacaEmail('${m.id}')">
+        <div class="mail-item" onclick="bacaEmail(${m.id})">
           <div class="mail-avatar">${initial}</div>
           <div class="mail-content">
-            <div class="mail-from">${escapeHtml(m.from.address)}</div>
+            <div class="mail-from">${escapeHtml(m.from)}</div>
             <div class="mail-subject">${escapeHtml(m.subject || '(tanpa subjek)')}</div>
-            <div class="mail-date">${new Date(m.createdAt).toLocaleString('id-ID')}</div>
+            <div class="mail-date">${escapeHtml(m.date)}</div>
           </div>
         </div>
       `;
@@ -96,11 +75,10 @@ async function loadInbox() {
 
 async function bacaEmail(id) {
   try {
-    const res = await fetch(`${API}/messages/${id}`, {
-      headers: { Authorization: `Bearer ${currentAccount.token}` }
-    });
+    const url = `${API}?action=readMessage&login=${currentAccount.user}&domain=${currentAccount.domain}&id=${id}`;
+    const res = await fetch(url);
     const msg = await res.json();
-    const body = msg.text || (msg.html ? msg.html.join('') : '(kosong)');
+    const body = msg.textBody || stripHtml(msg.htmlBody) || '(kosong)';
 
     const modal = document.createElement('div');
     modal.className = 'modal';
@@ -108,7 +86,7 @@ async function bacaEmail(id) {
     modal.innerHTML = `
       <div class="modal-content">
         <h3>${escapeHtml(msg.subject || '(tanpa subjek)')}</h3>
-        <div class="modal-meta">Dari: ${escapeHtml(msg.from.address)}</div>
+        <div class="modal-meta">Dari: ${escapeHtml(msg.from)}</div>
         <div class="modal-body">${escapeHtml(body)}</div>
         <button class="modal-close" onclick="this.closest('.modal').remove()">TUTUP</button>
       </div>
@@ -118,6 +96,13 @@ async function bacaEmail(id) {
   } catch (e) {
     alert('Gagal baca email: ' + e.message);
   }
+}
+
+function stripHtml(html) {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
 }
 
 function copyEmail() {
