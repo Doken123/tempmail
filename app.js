@@ -1,14 +1,13 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.GW VIA PROXY
+// OXY TEMPMAIL - MAIL.TM VIA PROXY
 // ============================================
 
 const API = '/api/proxy?path=';
-const STORAGE_KEY = 'oxy_mailgw_account';
+const STORAGE_KEY = 'oxy_mailtm_account';
 
 let currentAccount = null;
 let refreshInterval = null;
 
-// ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
   console.log('========== [OXY] APP START ==========');
   setupNav();
@@ -30,7 +29,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ===== NAV =====
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.onclick = () => {
@@ -59,7 +57,6 @@ function setupNav() {
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
-// ===== BIKIN EMAIL BARU =====
 async function createEmail() {
   const status = document.getElementById('statusEmail');
   const btn = document.getElementById('btnCopy');
@@ -67,27 +64,26 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // 1. Ambil domain aktif
     const domRes = await fetch(API + 'domains');
     const domData = await domRes.json();
     console.log('[OXY] Domains:', domData);
+
     const domains = domData['hydra:member'] || [];
     if (!domains.length) throw new Error('Ga ada domain aktif');
 
     const domain = domains[0].domain;
     console.log('[OXY] Domain:', domain);
 
-    // 2. Generate username & password
     const user = Math.random().toString(36).substring(2, 12).toLowerCase();
     const email = user + '@' + domain;
     const password = Math.random().toString(36).substring(2, 16);
 
-    // 3. Daftar
     const accRes = await fetch(API + 'accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password })
     });
+
     if (!accRes.ok) {
       const errText = await accRes.text();
       throw new Error('Gagal daftar: ' + errText.substring(0, 80));
@@ -95,7 +91,6 @@ async function createEmail() {
     const accData = await accRes.json();
     console.log('[OXY] ✅ Akun:', email);
 
-    // 4. Login
     const tokRes = await fetch(API + 'token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -126,7 +121,6 @@ async function createEmail() {
   }
 }
 
-// ===== TAMPILIN AKUN =====
 function applyAccount() {
   if (!currentAccount) return;
   document.getElementById('emailDisplay').textContent = currentAccount.email;
@@ -134,14 +128,12 @@ function applyAccount() {
   document.getElementById('accountSelect').innerHTML = '<option>' + currentAccount.email + '</option>';
 }
 
-// ===== REFRESH =====
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
   setTimeout(loadInbox, 1000);
 }
 
-// ===== LOAD INBOX =====
 async function loadInbox() {
   if (!currentAccount) return;
   const inbox = document.getElementById('inboxList');
@@ -193,7 +185,6 @@ async function loadInbox() {
   }
 }
 
-// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
     const res = await fetch(API + 'messages/' + id, {
@@ -220,7 +211,6 @@ async function bacaEmail(id) {
   }
 }
 
-// ===== UTIL =====
 function stripHtml(html) {
   if (!html) return '';
   const tmp = document.createElement('div');
