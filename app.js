@@ -1,8 +1,8 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.GW (tanpa proxy, CORS-friendly)
+// OXY TEMPMAIL - MAIL.GW VIA PROXY
 // ============================================
 
-const API = 'https://api.mail.gw';
+const API = '/api/proxy?path=';
 const STORAGE_KEY = 'oxy_mailgw_account';
 
 let currentAccount = null;
@@ -68,8 +68,9 @@ async function createEmail() {
 
   try {
     // 1. Ambil domain aktif
-    const domRes = await fetch(API + '/domains');
+    const domRes = await fetch(API + 'domains');
     const domData = await domRes.json();
+    console.log('[OXY] Domains:', domData);
     const domains = domData['hydra:member'] || [];
     if (!domains.length) throw new Error('Ga ada domain aktif');
 
@@ -82,17 +83,20 @@ async function createEmail() {
     const password = Math.random().toString(36).substring(2, 16);
 
     // 3. Daftar
-    const accRes = await fetch(API + '/accounts', {
+    const accRes = await fetch(API + 'accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password })
     });
-    if (!accRes.ok) throw new Error('Gagal daftar akun');
+    if (!accRes.ok) {
+      const errText = await accRes.text();
+      throw new Error('Gagal daftar: ' + errText.substring(0, 80));
+    }
     const accData = await accRes.json();
     console.log('[OXY] ✅ Akun:', email);
 
     // 4. Login
-    const tokRes = await fetch(API + '/token', {
+    const tokRes = await fetch(API + 'token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password })
@@ -144,7 +148,7 @@ async function loadInbox() {
   const badge = document.getElementById('inboxCountBadge');
 
   try {
-    const res = await fetch(API + '/messages', {
+    const res = await fetch(API + 'messages', {
       headers: { 'Authorization': 'Bearer ' + currentAccount.token }
     });
 
@@ -165,6 +169,8 @@ async function loadInbox() {
       inbox.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
       return;
     }
+
+    msgs.forEach(m => console.log('[OXY] 📧', m.from && m.from.address, '-', m.subject));
 
     inbox.innerHTML = msgs.map(m => {
       const subj = m.subject || '';
@@ -190,7 +196,7 @@ async function loadInbox() {
 // ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
-    const res = await fetch(API + '/messages/' + id, {
+    const res = await fetch(API + 'messages/' + id, {
       headers: { 'Authorization': 'Bearer ' + currentAccount.token }
     });
     const msg = await res.json();
