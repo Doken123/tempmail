@@ -14,6 +14,7 @@
     <button class="icon-btn" id="btnRefreshTop">🔄</button>
   </header>
 
+  <!-- PAGE: EMAIL -->
   <main id="pageEmail" class="page active">
     <div class="envelope-card">
       <div class="envelope-icon">📧</div>
@@ -21,10 +22,14 @@
       <p class="subtitle">Alamat Email sementara Anda</p>
       <button class="btn-copy" id="btnCopy">📋 Salin email</button>
     </div>
-    <button class="btn-change" id="btnChange">🔃 Ubah</button>
+
+    <button class="btn-save" id="btnSave">💾 Simpan akun ini</button>
+    <button class="btn-change" id="btnChange">🔃 Ganti akun baru</button>
+
     <p id="statusEmail" class="status"></p>
   </main>
 
+  <!-- PAGE: INBOX -->
   <main id="pageInbox" class="page">
     <div class="inbox-header">
       <select id="accountSelect" class="account-select">
@@ -41,6 +46,18 @@
     </div>
   </main>
 
+  <!-- PAGE: TERSIMPAN -->
+  <main id="pageSaved" class="page">
+    <div id="savedList" class="saved-list">
+      <div class="empty">
+        <div class="empty-icon">💾</div>
+        <p>Belum ada akun tersimpan</p>
+        <span>Klik "Simpan akun ini" di halaman Email</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- PAGE: KELOLA -->
   <main id="pageManage" class="page">
     <div class="manage-card">
       <h3>⚙️ Pengaturan</h3>
@@ -50,16 +67,21 @@
       </div>
       <div class="manage-item">
         <span>Provider</span>
-        <span class="value" id="providerName">Guerrilla Mail</span>
+        <span class="value">mail.tm</span>
       </div>
       <div class="manage-item">
         <span>Domain aktif</span>
         <span class="value" id="activeDomain">—</span>
       </div>
+      <div class="manage-item">
+        <span>Total akun tersimpan</span>
+        <span class="value" id="savedCount">0</span>
+      </div>
     </div>
-    <button class="btn-danger" id="btnDeleteAll">🗑️ Hapus & ganti akun</button>
+    <button class="btn-danger" id="btnDeleteAll">🗑️ Hapus akun aktif</button>
   </main>
 
+  <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-btn active" data-page="pageEmail">
       <span class="nav-icon">✉️</span>
@@ -69,6 +91,10 @@
       <span class="nav-icon">📥</span>
       <span>Kotak masuk</span>
     </button>
+    <button class="nav-btn" data-page="pageSaved">
+      <span class="nav-icon">💾</span>
+      <span>Tersimpan</span>
+    </button>
     <button class="nav-btn" data-page="pageManage">
       <span class="nav-icon">☰</span>
       <span>Kelola</span>
@@ -76,8 +102,5 @@
   </nav>
 
   <script src="app.js"></script>
-  <!-- ERUDA - console debug di HP. Hapus 2 baris ini kalau udah kelar debug -->
-  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-  <script>eruda.init();</script>
 </body>
 </html>
