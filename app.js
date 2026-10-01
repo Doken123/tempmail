@@ -1,18 +1,62 @@
 // ============================================
 // OXY TEMPMAIL - MAIL.TM via CF Function + SAVE AKUN
-// v2: error detail + username unik
+// v3: username pake nama orang normal
 // ============================================
 
 const API = '/proxy?path=';
 const STORAGE_KEY = 'oxy_mailtm_accounts';
 const ACTIVE_KEY = 'oxy_mailtm_active';
 
+// ===== DAFTAR NAMA (campur Indonesia + English) =====
+const NAMA_DEPAN = [
+  'budi', 'andi', 'agus', 'ahmad', 'dian', 'dewi', 'rina', 'siti',
+  'rizky', 'fajar', 'putri', 'maya', 'indah', 'wawan', 'hendra', 'yudi',
+  'tono', 'anto', 'bagus', 'dimas', 'ega', 'feri', 'gita', 'hadi',
+  'irfan', 'joko', 'kurnia', 'lina', 'made', 'nanda', 'okta', 'putra',
+  'rahma', 'sari', 'tari', 'umi', 'vina', 'wati', 'yanti', 'zainal',
+  'adam', 'brian', 'charles', 'david', 'edward', 'frank', 'george', 'henry',
+  'ivan', 'jack', 'kevin', 'leo', 'michael', 'nathan', 'oscar', 'peter',
+  'ryan', 'steven', 'thomas', 'victor', 'william', 'alice', 'bella', 'clara',
+  'diana', 'emma', 'fiona', 'grace', 'hannah', 'isabella', 'jessica', 'kate'
+];
+
+const NAMA_BELAKANG = [
+  'santoso', 'wijaya', 'kurniawan', 'setiawan', 'susanto', 'hidayat', 'fauzi',
+  'pratama', 'ramadhan', 'nugroho', 'saputra', 'wibowo', 'hartono', 'gunawan',
+  'kusuma', 'maulana', 'putra', 'permana', 'firmansyah', 'arifin', 'rahman',
+  'siregar', 'nasution', 'simanjuntak', 'situmorang', 'manurung', 'hutapea',
+  'smith', 'johnson', 'williams', 'brown', 'jones', 'garcia', 'miller',
+  'davis', 'rodriguez', 'martinez', 'hernandez', 'lopez', 'gonzalez', 'wilson',
+  'anderson', 'thomas', 'taylor', 'moore', 'jackson', 'martin', 'lee',
+  'perez', 'thompson', 'white', 'harris', 'sanchez', 'clark', 'ramirez'
+];
+
 let currentAccount = null;
 let refreshInterval = null;
 
+// ===== GENERATE USERNAME NORMAL =====
+function generateUsername() {
+  const depan = NAMA_DEPAN[Math.floor(Math.random() * NAMA_DEPAN.length)];
+  const belakang = NAMA_BELAKANG[Math.floor(Math.random() * NAMA_BELAKANG.length)];
+  const angka = Math.floor(Math.random() * 90) + 10; // 10-99
+  
+  // Format variasi biar keliatan natural
+  const format = Math.floor(Math.random() * 3);
+  let user;
+  if (format === 0) {
+    user = depan + '.' + belakang + angka;         // budi.santoso84
+  } else if (format === 1) {
+    user = depan + belakang + angka;                // budisantoso84
+  } else {
+    user = depan + '.' + belakang;                  // budi.santoso
+  }
+  
+  return user.toLowerCase().replace(/[^a-z0-9.]/g, '');
+}
+
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('========== [OXY] APP START v2 ==========');
+  console.log('========== [OXY] APP START v3 ==========');
   setupNav();
 
   const activeEmail = localStorage.getItem(ACTIVE_KEY);
@@ -33,13 +77,12 @@ window.addEventListener('DOMContentLoaded', () => {
   createEmail();
 });
 
-// ===== STORAGE HELPERS =====
+// ===== STORAGE =====
 function getAccounts() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   } catch (e) { return []; }
 }
-
 function saveAccounts(accounts) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
 }
@@ -55,21 +98,18 @@ function setupNav() {
       btn.classList.add('active');
       const titles = { pageEmail: 'Email', pageInbox: 'Kotak masuk', pageSaved: 'Tersimpan', pageManage: 'Kelola' };
       document.getElementById('headerTitle').textContent = titles[pageId];
-
       if (pageId === 'pageSaved') renderSavedList();
       if (pageId === 'pageInbox') loadInbox();
     };
   });
 
   document.getElementById('btnMenu').onclick = () => document.querySelector('[data-page="pageManage"]').click();
-
   document.getElementById('btnRefreshTop').onclick = () => {
     loadInbox();
     const s = document.getElementById('statusEmail');
     s.textContent = '🔄 Refresh...';
     setTimeout(() => s.textContent = '', 1500);
   };
-
   document.getElementById('btnCopy').onclick = copyEmail;
   document.getElementById('btnChange').onclick = changeEmail;
   document.getElementById('btnSave').onclick = saveCurrentAccount;
@@ -84,43 +124,34 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    // 1. Ambil domain
     const domRes = await fetch(API + 'domains');
     const domText = await domRes.text();
-    console.log('[OXY] Domains raw:', domText.substring(0, 200));
-
     let domData;
     try { domData = JSON.parse(domText); } catch (e) {
-      throw new Error('Domain response bukan JSON: ' + domText.substring(0, 80));
+      throw new Error('Response domain bukan JSON');
     }
 
     let domains = Array.isArray(domData) ? domData : (domData['hydra:member'] || []);
     if (!domains.length) throw new Error('Ga ada domain aktif');
-
     const domain = domains[0].domain || domains[0].name;
-    if (!domain) throw new Error('Domain ga valid');
     console.log('[OXY] Domain:', domain);
 
-    // 2. Username UNIK: random + timestamp
-    const ts = Date.now().toString(36).slice(-5);
-    const rnd = Math.random().toString(36).substring(2, 8);
-    const user = (rnd + ts).toLowerCase().replace(/[^a-z0-9]/g, '');
+    // USERNAME PAKE NAMA ORANG
+    const user = generateUsername();
     const email = user + '@' + domain;
-    const password = 'oxy' + Math.random().toString(36).substring(2, 14) + 'X';
-    console.log('[OXY] Coba daftar:', email);
+    const password = 'pass' + Math.random().toString(36).substring(2, 10) + 'X';
+    console.log('[OXY] Daftar:', email);
 
-    // 3. Daftar akun
     const accRes = await fetch(API + 'accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password: password })
     });
-
     const accText = await accRes.text();
-    console.log('[OXY] Daftar status:', accRes.status, 'body:', accText.substring(0, 200));
+    console.log('[OXY] Daftar:', accRes.status, accText.substring(0, 100));
 
     if (!accRes.ok) {
-      throw new Error('Gagal daftar (' + accRes.status + '): ' + accText.substring(0, 100));
+      throw new Error('Gagal daftar (' + accRes.status + '): ' + accText.substring(0, 80));
     }
 
     let accData;
@@ -128,21 +159,17 @@ async function createEmail() {
       throw new Error('Response daftar bukan JSON');
     }
 
-    // 4. Login dapet token
     const tokRes = await fetch(API + 'token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: email, password: password })
     });
     const tokText = await tokRes.text();
-    console.log('[OXY] Token status:', tokRes.status, 'body:', tokText.substring(0, 200));
-
     let tokData;
     try { tokData = JSON.parse(tokText); } catch (e) {
       throw new Error('Response token bukan JSON');
     }
-
-    if (!tokData.token) throw new Error('Token gagal: ' + tokText.substring(0, 80));
+    if (!tokData.token) throw new Error('Token gagal');
 
     currentAccount = {
       email: email,
@@ -154,18 +181,18 @@ async function createEmail() {
     };
 
     localStorage.setItem(ACTIVE_KEY, email);
-    console.log('[OXY] ✅ Email baru sukses:', email);
+    console.log('[OXY] ✅ Sukses:', email);
 
     applyAccount();
     if (status) status.textContent = '✅ Email siap!';
     startRefresh();
   } catch (e) {
-    console.error('[OXY] ❌ Error:', e);
+    console.error('[OXY] ❌', e);
     if (status) status.textContent = '❌ ' + e.message;
   } finally { btn.disabled = false; }
 }
 
-// ===== SIMPAN AKUN AKTIF =====
+// ===== SIMPAN AKUN =====
 function saveCurrentAccount() {
   if (!currentAccount) return;
   const status = document.getElementById('statusEmail');
@@ -186,7 +213,7 @@ function saveCurrentAccount() {
   setTimeout(() => { if (status) status.textContent = ''; }, 2000);
 }
 
-// ===== RENDER DAFTAR TERSIMPAN =====
+// ===== RENDER DAFTAR =====
 function renderSavedList() {
   const list = document.getElementById('savedList');
   if (!list) return;
@@ -214,40 +241,32 @@ function renderSavedList() {
   }).join('');
 }
 
-// ===== GANTI AKUN =====
 function switchAccount(email) {
   const accounts = getAccounts();
   const found = accounts.find(a => a.email === email);
   if (!found) return;
-
   currentAccount = found;
   localStorage.setItem(ACTIVE_KEY, email);
-  console.log('[OXY] Ganti ke akun:', email);
-
+  console.log('[OXY] Ganti:', email);
   applyAccount();
   renderSavedList();
   startRefresh();
   document.querySelector('[data-page="pageEmail"]').click();
 }
 
-// ===== HAPUS AKUN =====
 function deleteAccount(email) {
   if (!confirm('Hapus akun ' + email + '?')) return;
-
   let accounts = getAccounts();
   accounts = accounts.filter(a => a.email !== email);
   saveAccounts(accounts);
-
   if (currentAccount && currentAccount.email === email) {
     currentAccount = null;
     localStorage.removeItem(ACTIVE_KEY);
     createEmail();
   }
-
   renderSavedList();
 }
 
-// ===== TAMPILIN AKUN =====
 function applyAccount() {
   if (!currentAccount) return;
   document.getElementById('emailDisplay').textContent = currentAccount.email;
@@ -257,15 +276,10 @@ function applyAccount() {
   const accounts = getAccounts();
   const isSaved = accounts.some(a => a.email === currentAccount.email);
   const btnSave = document.getElementById('btnSave');
-  if (isSaved) {
-    btnSave.textContent = '✅ Akun tersimpan';
-  } else {
-    btnSave.textContent = '💾 Simpan akun ini';
-  }
+  btnSave.textContent = isSaved ? '✅ Akun tersimpan' : '💾 Simpan akun ini';
   btnSave.disabled = false;
 }
 
-// ===== REFRESH =====
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
@@ -282,9 +296,7 @@ async function loadInbox() {
     const res = await fetch(API + 'messages', {
       headers: { 'Authorization': 'Bearer ' + currentAccount.token }
     });
-
     if (res.status === 401) {
-      console.log('[OXY] Token expired');
       localStorage.removeItem(ACTIVE_KEY);
       createEmail();
       return;
@@ -292,7 +304,7 @@ async function loadInbox() {
 
     const data = await res.json();
     let msgs = Array.isArray(data) ? data : (data['hydra:member'] || []);
-    console.log('[OXY] 📥 Inbox count:', msgs.length);
+    console.log('[OXY] 📥 Inbox:', msgs.length);
 
     badge.textContent = msgs.length;
 
@@ -316,13 +328,9 @@ async function loadInbox() {
         '<div class="mail-preview">' + preview + '</div>' +
       '</div>';
     }).join('');
-
-  } catch (e) {
-    console.error('[OXY] ❌ Error loadInbox:', e);
-  }
+  } catch (e) { console.error('[OXY] ❌', e); }
 }
 
-// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
     const res = await fetch(API + 'messages/' + id, {
@@ -343,10 +351,7 @@ async function bacaEmail(id) {
       '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button>' +
     '</div>';
     document.body.appendChild(modal);
-  } catch (e) {
-    console.error('[OXY] Error bacaEmail:', e);
-    alert('Gagal baca: ' + e.message);
-  }
+  } catch (e) { alert('Gagal: ' + e.message); }
 }
 
 // ===== UTIL =====
@@ -356,7 +361,6 @@ function stripHtml(html) {
   tmp.innerHTML = html;
   return tmp.textContent || tmp.innerText || '';
 }
-
 function copyEmail() {
   if (!currentAccount) return;
   navigator.clipboard.writeText(currentAccount.email);
@@ -364,21 +368,16 @@ function copyEmail() {
   s.textContent = '📋 Email dicopy!';
   setTimeout(() => s.textContent = '', 2000);
 }
-
 function changeEmail() {
-  console.log('[OXY] Bikin email baru...');
   if (refreshInterval) clearInterval(refreshInterval);
   currentAccount = null;
   localStorage.removeItem(ACTIVE_KEY);
-
   document.getElementById('emailDisplay').textContent = '—';
   document.getElementById('statusEmail').textContent = '';
   document.getElementById('inboxList').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><p>Kotak masuk kosong</p><span>Email yang masuk bakal muncul di sini</span></div>';
   document.getElementById('inboxCountBadge').textContent = '0';
-
   createEmail();
 }
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
