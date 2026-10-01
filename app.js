@@ -1,9 +1,9 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM VIA PROXY
+// OXY TEMPMAIL - TEMPMAIL.LOL VIA PROXY
 // ============================================
 
 const API = '/api/proxy?path=';
-const STORAGE_KEY = 'oxy_mailtm_account';
+const STORAGE_KEY = 'oxy_tempmail_lol';
 
 let currentAccount = null;
 let refreshInterval = null;
@@ -64,52 +64,22 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    const domRes = await fetch(API + 'domains');
-    const domData = await domRes.json();
-    console.log('[OXY] Domains:', domData);
+    const res = await fetch(API + 'generate');
+    const data = await res.json();
+    console.log('[OXY] Generate response:', data);
 
-    const domains = domData['hydra:member'] || [];
-    if (!domains.length) throw new Error('Ga ada domain aktif');
-
-    const domain = domains[0].domain;
-    console.log('[OXY] Domain:', domain);
-
-    const user = Math.random().toString(36).substring(2, 12).toLowerCase();
-    const email = user + '@' + domain;
-    const password = Math.random().toString(36).substring(2, 16);
-
-    const accRes = await fetch(API + 'accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-
-    if (!accRes.ok) {
-      const errText = await accRes.text();
-      throw new Error('Gagal daftar: ' + errText.substring(0, 80));
-    }
-    const accData = await accRes.json();
-    console.log('[OXY] ✅ Akun:', email);
-
-    const tokRes = await fetch(API + 'token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: email, password })
-    });
-    const tokData = await tokRes.json();
-    if (!tokData.token) throw new Error('Token gagal');
+    if (!data.address || !data.token) throw new Error('Ga dapet email dari server');
 
     currentAccount = {
-      email: email,
-      password: password,
-      token: tokData.token,
-      id: accData.id,
-      domain: domain
+      email: data.address,
+      token: data.token,
+      domain: data.address.split('@')[1] || '-'
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
+    console.log('[OXY] ✅ Email:', currentAccount.email);
 
     applyAccount();
-    if (status) status.textContent = '✅ Email siap!';
+    if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
 
     startRefresh();
 
@@ -131,30 +101,20 @@ function applyAccount() {
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
-  setTimeout(loadInbox, 1000);
+  setTimeout(loadInbox, 1500);
 }
 
 async function loadInbox() {
-  if (!currentAccount) return;
+  if (!currentAccount || !currentAccount.token) return;
   const inbox = document.getElementById('inboxList');
   const badge = document.getElementById('inboxCountBadge');
 
   try {
-    const res = await fetch(API + 'messages', {
-      headers: { 'Authorization': 'Bearer ' + currentAccount.token }
-    });
-
-    if (res.status === 401) {
-      console.log('[OXY] Token expired');
-      localStorage.removeItem(STORAGE_KEY);
-      createEmail();
-      return;
-    }
-
+    const res = await fetch(API + 'auth/' + currentAccount.token);
     const data = await res.json();
-    const msgs = data['hydra:member'] || [];
-    console.log('[OXY] 📥 Inbox count:', msgs.length);
+    console.log('[OXY] Inbox response:', data);
 
+    const msgs = data.email || data.emails || [];
     badge.textContent = msgs.length;
 
     if (!msgs.length) {
@@ -162,44 +122,46 @@ async function loadInbox() {
       return;
     }
 
-    msgs.forEach(m => console.log('[OXY] 📧', m.from && m.from.address, '-', m.subject));
+    msgs.forEach(m => console.log('[OXY] 📧', m.from, '-', m.subject));
 
-    inbox.innerHTML = msgs.map(m => {
+    inbox.innerHTML = msgs.map((m, i) => {
       const subj = m.subject || '';
-      const from = (m.from && m.from.address) ? m.from.address : 'Unknown';
+      const from = m.from || 'Unknown';
       const codeMatch = subj.match(/\b\d{4,8}\b/);
-      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : subj;
+      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : (m.body || '').substring(0, 60);
 
-      return '<div class="mail-item" onclick="bacaEmail(\'' + m.id + '\')">' +
+      return '<div class="mail-item" onclick="bacaEmail(' + i + ')">' +
         '<div class="mail-top">' +
           '<div class="mail-from">' + escapeHtml(from) + '</div>' +
-          '<div class="mail-date">' + new Date(m.createdAt).toLocaleString('id-ID') + '</div>' +
+          '<div class="mail-date">' + escapeHtml(m.date || '') + '</div>' +
         '</div>' +
         '<div class="mail-subject">' + escapeHtml(subj || '(tanpa subjek)') + '</div>' +
         '<div class="mail-preview">' + preview + '</div>' +
       '</div>';
     }).join('');
 
+    // Simpen list buat dibaca detail
+    window.__currentMails = msgs;
+
   } catch (e) {
     console.error('[OXY] ❌ Error loadInbox:', e);
   }
 }
 
-async function bacaEmail(id) {
+async function bacaEmail(idx) {
   try {
-    const res = await fetch(API + 'messages/' + id, {
-      headers: { 'Authorization': 'Bearer ' + currentAccount.token }
-    });
-    const msg = await res.json();
-    const body = msg.text || (msg.html ? stripHtml(msg.html.join('')) : '') || '(kosong)';
-    const from = (msg.from && msg.from.address) ? msg.from.address : 'Unknown';
+    const m = window.__currentMails && window.__currentMails[idx];
+    if (!m) throw new Error('Email ga ketemu');
+
+    const body = m.body || m.html || '(kosong)';
+    const from = m.from || 'Unknown';
 
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     modal.innerHTML = '<div class="modal-content">' +
       '<div class="modal-handle"></div>' +
-      '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
+      '<h3>' + escapeHtml(m.subject || '(tanpa subjek)') + '</h3>' +
       '<div class="modal-meta">Dari: ' + escapeHtml(from) + '</div>' +
       '<div class="modal-body">' + escapeHtml(body) + '</div>' +
       '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button>' +
@@ -209,13 +171,6 @@ async function bacaEmail(id) {
     console.error('[OXY] Error bacaEmail:', e);
     alert('Gagal baca: ' + e.message);
   }
-}
-
-function stripHtml(html) {
-  if (!html) return '';
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || '';
 }
 
 function copyEmail() {
