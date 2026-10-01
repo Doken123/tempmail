@@ -1,29 +1,47 @@
 // ============================================
-// OXY TEMPMAIL - GUERRILLA MAIL (FULL DEBUG)
+// OXY TEMPMAIL - GUERRILLA MAIL
+// Fix: domain block, akun lama, parsing
 // ============================================
 
 const API = 'https://api.guerrillamail.com/ajax.php';
 const STORAGE_KEY = 'oxy_guerrilla_account';
 
+// DAFTAR DOMAIN YANG BENER (bukan block)
+const DOMAINS = [
+  'sharklasers.com',
+  'grr.la',
+  'guerrillamail.info',
+  'guerrillamail.biz',
+  'guerrillamail.org',
+  'guerrillamail.net',
+  'spam4.me'
+];
+
 let currentAccount = null;
 let refreshInterval = null;
 let sidToken = null;
 
+// ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
   console.log('========== [OXY] APP START ==========');
-  console.log('[OXY] Guerrilla Mail version');
-
   setupNav();
 
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
       const acc = JSON.parse(saved);
-      currentAccount = acc;
-      sidToken = acc.sid_token;
-      console.log('[OXY] Load akun lama:', acc.email);
-      applyAccount();
-      startRefresh();
+      // Kalau akun lama pake domain BLOCK — buang, bikin baru
+      if (acc.email && acc.email.includes('block')) {
+        console.warn('[OXY] Akun lama pake domain BLOCK, buang!');
+        localStorage.removeItem(STORAGE_KEY);
+        createEmail();
+      } else {
+        currentAccount = acc;
+        sidToken = acc.sid_token;
+        console.log('[OXY] Load akun lama:', acc.email);
+        applyAccount();
+        startRefresh();
+      }
     } catch (e) {
       console.error('[OXY] Storage rusak:', e);
       createEmail();
@@ -33,6 +51,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// ===== NAV =====
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.onclick = () => {
@@ -46,7 +65,9 @@ function setupNav() {
     };
   });
 
-  document.getElementById('btnMenu').onclick = () => document.querySelector('[data-page="pageManage"]').click();
+  document.getElementById('btnMenu').onclick = () => {
+    document.querySelector('[data-page="pageManage"]').click();
+  };
 
   document.getElementById('btnRefreshTop').onclick = () => {
     console.log('[OXY] Manual refresh');
@@ -61,6 +82,7 @@ function setupNav() {
   document.getElementById('btnDeleteAll').onclick = changeEmail;
 }
 
+// ===== BIKIN EMAIL BARU =====
 async function createEmail() {
   const status = document.getElementById('statusEmail');
   const btn = document.getElementById('btnCopy');
@@ -68,39 +90,55 @@ async function createEmail() {
   if (status) status.textContent = '⏳ Bikin email...';
 
   try {
-    const url = API + '?f=get_email_address&lang=id&agent=oxy-tempmail';
-    console.log('[OXY] Fetch URL:', url);
+    let berhasil = null;
 
-    const res = await fetch(url);
-    console.log('[OXY] Response status:', res.status);
+    // Coba tiap domain sampe dapet yang BUKAN block
+    for (const domain of DOMAINS) {
+      const url = API + '?f=get_email_address&lang=id&site=' + encodeURIComponent(domain) + '&agent=oxy-tempmail';
+      console.log('[OXY] Coba domain:', domain);
 
-    const data = await res.json();
-    console.log('[OXY] Response data:', data);
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        console.log('[OXY] Dapet:', data.email_addr);
 
-    if (!data.email_addr) throw new Error('Ga dapet email');
+        if (data.email_addr && !data.email_addr.includes('block')) {
+          berhasil = data;
+          console.log('[OXY] ✅ Domain valid:', data.email_addr);
+          break;
+        } else {
+          console.warn('[OXY] ⚠️ Domain di-block, coba lain...');
+        }
+      } catch (e) {
+        console.error('[OXY] Error domain ' + domain + ':', e.message);
+      }
+    }
+
+    if (!berhasil) throw new Error('Semua domain diblokir. Ganti koneksi (WiFi ↔ data) atau tunggu bentar.');
 
     currentAccount = {
-      email: data.email_addr,
-      sid_token: data.sid_token
+      email: berhasil.email_addr,
+      sid_token: berhasil.sid_token
     };
-    sidToken = data.sid_token;
+    sidToken = berhasil.sid_token;
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentAccount));
-    console.log('[OXY] ✅ Email baru:', currentAccount.email);
+    console.log('[OXY] ✅ Email fix:', currentAccount.email);
 
     applyAccount();
-    if (status) status.textContent = '✅ Email siap! Cek Kotak masuk...';
+    if (status) status.textContent = '✅ Email siap!';
 
     startRefresh();
 
   } catch (e) {
-    console.error('[OXY] ❌ Error createEmail:', e);
+    console.error('[OXY] ❌ Error:', e);
     if (status) status.textContent = '❌ ' + e.message;
   } finally {
     btn.disabled = false;
   }
 }
 
+// ===== TAMPILIN AKUN =====
 function applyAccount() {
   if (!currentAccount) return;
   const email = currentAccount.email;
@@ -110,12 +148,14 @@ function applyAccount() {
   document.getElementById('accountSelect').innerHTML = '<option>' + email + '</option>';
 }
 
+// ===== REFRESH =====
 function startRefresh() {
   if (refreshInterval) clearInterval(refreshInterval);
   refreshInterval = setInterval(loadInbox, 5000);
   setTimeout(loadInbox, 1500);
 }
 
+// ===== LOAD INBOX =====
 async function loadInbox() {
   if (!currentAccount || !sidToken) return;
   const inbox = document.getElementById('inboxList');
@@ -159,6 +199,7 @@ async function loadInbox() {
   }
 }
 
+// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
     const url = API + '?f=fetch_email&email_id=' + id + '&sid_token=' + encodeURIComponent(sidToken);
@@ -186,6 +227,7 @@ async function bacaEmail(id) {
   }
 }
 
+// ===== UTIL =====
 function copyEmail() {
   if (!currentAccount) return;
   navigator.clipboard.writeText(currentAccount.email);
