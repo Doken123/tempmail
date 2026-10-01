@@ -14,13 +14,14 @@ html, body {
 
 body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom: 70px; }
 
+/* ===== HEADER ===== */
 .app-header {
   position: sticky; top: 0;
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; background: var(--bg); z-index: 100;
   border-bottom: 1px solid var(--border);
 }
-.app-header h1 { font-size: 1.15rem; font-weight: 600; }
+.app-header h1 { font-size: 1.15rem; font-weight: 600; color: var(--text); }
 
 .icon-btn {
   width: 40px; height: 40px; border-radius: 50%; border: none;
@@ -30,6 +31,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 }
 .icon-btn:hover { background: var(--card); }
 
+/* ===== PAGES ===== */
 .page { display: none; flex: 1; padding: 20px; animation: fadeIn 0.25s ease; }
 .page.active { display: block; }
 
@@ -38,10 +40,11 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ===== EMAIL PAGE ===== */
 .envelope-card {
   background: var(--card); border-radius: 24px;
   padding: 40px 24px 32px; text-align: center;
-  position: relative; overflow: hidden; margin-bottom: 24px;
+  position: relative; overflow: hidden; margin-bottom: 20px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 .envelope-card::before {
@@ -67,6 +70,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
   font-size: 1.05rem; font-weight: 600;
   margin-bottom: 6px; word-break: break-all;
   position: relative; z-index: 1; padding: 0 8px;
+  color: var(--text);
 }
 
 .subtitle {
@@ -85,6 +89,16 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 .btn-copy:active { background: var(--green-dark); transform: scale(0.98); }
 .btn-copy:disabled { background: var(--card-hover); color: var(--text-muted); cursor: not-allowed; box-shadow: none; }
 
+.btn-save {
+  width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: rgba(38,208,124,0.15); color: var(--green);
+  font-family: inherit; font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  gap: 8px; margin-bottom: 10px; transition: all 0.2s;
+}
+.btn-save:active { background: rgba(38,208,124,0.3); }
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .btn-change {
   width: 100%; padding: 14px; border: none; background: transparent;
   color: var(--text-dim); font-family: inherit; font-size: 0.95rem;
@@ -94,8 +108,12 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 }
 .btn-change:hover { background: var(--card); color: var(--text); }
 
-.status { margin-top: 16px; font-size: 0.85rem; text-align: center; color: var(--green); min-height: 20px; }
+.status {
+  margin-top: 16px; font-size: 0.85rem;
+  text-align: center; color: var(--green); min-height: 20px;
+}
 
+/* ===== INBOX PAGE ===== */
 .inbox-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 
 .account-select {
@@ -104,7 +122,8 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
   color: var(--text); font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem; cursor: pointer; outline: none; appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='3'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 16px center; padding-right: 40px;
+  background-repeat: no-repeat; background-position: right 16px center;
+  padding-right: 40px;
 }
 
 .count-badge {
@@ -120,6 +139,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 .empty p { font-size: 1.05rem; font-weight: 500; color: var(--text); margin-bottom: 6px; }
 .empty span { font-size: 0.85rem; }
 
+/* MAIL ITEM */
 .mail-item {
   background: var(--card); border-radius: 16px; padding: 16px;
   cursor: pointer; transition: all 0.2s; animation: slideIn 0.3s ease;
@@ -134,15 +154,57 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 }
 
 .mail-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 12px; }
-.mail-from { font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.mail-from { font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; color: var(--text); }
 .mail-date { font-size: 0.75rem; color: var(--text-muted); flex-shrink: 0; font-family: 'JetBrains Mono', monospace; }
 .mail-subject { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mail-preview { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mail-preview .code { color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; }
 
+/* ===== SAVED PAGE ===== */
+.saved-list { display: flex; flex-direction: column; gap: 10px; }
+
+.saved-item {
+  background: var(--card); border-radius: 16px; padding: 16px;
+  display: flex; align-items: center; gap: 12px;
+  transition: all 0.2s; border: 1px solid transparent;
+  cursor: pointer;
+}
+.saved-item:hover { background: var(--card-hover); border-color: rgba(38,208,124,0.3); }
+.saved-item.active { border-color: var(--green); background: rgba(38,208,124,0.08); }
+
+.saved-item-info { flex: 1; min-width: 0; }
+
+.saved-item-email {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem; font-weight: 600;
+  color: var(--text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.saved-item-meta { font-size: 0.7rem; color: var(--text-muted); }
+
+.saved-item-badge {
+  font-size: 0.65rem; background: var(--green); color: #fff;
+  padding: 3px 8px; border-radius: 99px;
+  font-weight: 700; flex-shrink: 0;
+}
+
+.saved-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.icon-action {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: none; background: rgba(255,255,255,0.05);
+  color: var(--text-dim); font-size: 0.9rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.icon-action:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+/* ===== MANAGE PAGE ===== */
 .manage-card { background: var(--card); border-radius: 16px; padding: 8px 20px; margin-bottom: 16px; }
-.manage-card h3 { font-size: 1rem; font-weight: 600; padding: 16px 0; border-bottom: 1px solid var(--border); }
-.manage-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.manage-card h3 { font-size: 1rem; font-weight: 600; padding: 16px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+.manage-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem; color: var(--text); }
 .manage-item:last-child { border-bottom: none; }
 .manage-item .value { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
 
@@ -155,6 +217,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 }
 .btn-danger:active { background: rgba(239,68,68,0.25); }
 
+/* ===== BOTTOM NAV ===== */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
   background: var(--bg-2); border-top: 1px solid var(--border);
@@ -173,6 +236,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
 .nav-btn.active { color: var(--green); }
 .nav-btn.active .nav-icon { transform: scale(1.1); }
 
+/* ===== MODAL ===== */
 .modal {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
@@ -196,8 +260,29 @@ body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom:
   width: 40px; height: 4px; background: var(--text-muted);
   border-radius: 99px; margin: 0 auto 20px; opacity: 0.5;
 }
-.modal-content h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
-.modal-meta { font-size: 0.8rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.modal-body { color: #d1d5db; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; margin-bottom: 20px; }
-.modal-close { width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--green); color: #fff; font-family: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+.modal-content h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+.modal-meta {
+  font-size: 0.8rem; color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 20px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-body {
+  color: #d1d5db; font-size: 0.9rem;
+  line-height: 1.6; white-space: pre-wrap;
+  word-break: break-word; margin-bottom: 20px;
+}
+.modal-close {
+  width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: var(--green); color: #fff; font-family: inherit;
+  font-size: 0.95rem; font-weight: 600; cursor: pointer;
+}
 .modal-close:active { background: var(--green-dark); }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 520px) {
+  .container { padding: 24px 14px; }
+  .logo h1 { font-size: 1.5rem; }
+  .card-body { padding: 18px; }
+  .email-actions { flex-wrap: wrap; }
+}
