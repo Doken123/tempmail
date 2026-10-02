@@ -1,6 +1,5 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE + NOTE
-// v5: tambah note/catatan per akun
+// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE + NOTE + LINKIFY
 // ============================================
 
 const API = '/proxy?path=';
@@ -54,7 +53,7 @@ function generatePassword() {
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('========== [OXY] APP START v5 ==========');
+  console.log('========== [OXY] APP START ==========');
   setupNav();
 
   const activeEmail = localStorage.getItem(ACTIVE_KEY);
@@ -178,14 +177,13 @@ async function createEmail() {
   } finally { btn.disabled = false; }
 }
 
-// ===== SIMPAN AKUN (DENGAN NOTE) =====
+// ===== SIMPAN AKUN =====
 function saveCurrentAccount() {
   if (!currentAccount) return;
   const status = document.getElementById('statusEmail');
   const accounts = getAccounts();
   const existing = accounts.findIndex(a => a.email === currentAccount.email);
 
-  // Tanya note kalau akun baru
   if (existing < 0) {
     const note = prompt('Kasih note buat akun ini (opsional):', '');
     if (note !== null) currentAccount.note = note.trim();
@@ -210,18 +208,11 @@ function editNote(email) {
   const accounts = getAccounts();
   const acc = accounts.find(a => a.email === email);
   if (!acc) return;
-
   const newNote = prompt('Edit note buat ' + email + ':', acc.note || '');
-  if (newNote === null) return; // cancel
-
+  if (newNote === null) return;
   acc.note = newNote.trim();
   saveAccounts(accounts);
-
-  // Update currentAccount kalau yang diedit = aktif
-  if (currentAccount && currentAccount.email === email) {
-    currentAccount.note = acc.note;
-  }
-
+  if (currentAccount && currentAccount.email === email) currentAccount.note = acc.note;
   renderSavedList();
 }
 
@@ -339,6 +330,7 @@ async function loadInbox() {
   } catch (e) { console.error('[OXY]', e); }
 }
 
+// ===== BACA EMAIL =====
 async function bacaEmail(id) {
   try {
     const res = await fetch(API + 'messages/' + id, {
@@ -353,10 +345,19 @@ async function bacaEmail(id) {
     modal.innerHTML = '<div class="modal-content"><div class="modal-handle"></div>' +
       '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
       '<div class="modal-meta">Dari: ' + escapeHtml(from) + '</div>' +
-      '<div class="modal-body">' + escapeHtml(body) + '</div>' +
+      '<div class="modal-body">' + linkify(body) + '</div>' +
       '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button></div>';
     document.body.appendChild(modal);
   } catch (e) { alert('Gagal: ' + e.message); }
+}
+
+// ===== LINKIFY =====
+function linkify(text) {
+  const escaped = escapeHtml(text);
+  const urlRegex = /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]}"'])/g;
+  return escaped.replace(urlRegex, (url) => {
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="mail-link">' + url + '</a>';
+  });
 }
 
 function stripHtml(html) {
