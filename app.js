@@ -1,5 +1,6 @@
 // ============================================
-// OXY TEMPMAIL - MAIL.TM via CF Function + SAVE + NOTE + LINKIFY
+// OXY TEMPMAIL - MAIL.TM via CF Function
+// v6: GMAIL-STYLE UI
 // ============================================
 
 const API = '/proxy?path=';
@@ -29,6 +30,13 @@ const NAMA_BELAKANG = [
   'perez', 'thompson', 'white', 'harris', 'sanchez', 'clark', 'ramirez'
 ];
 
+// Warna avatar Gmail-style
+const AVATAR_COLORS = [
+  '#d93025', '#e37400', '#f9ab00', '#1a73e8', '#9334e6',
+  '#00897b', '#e91e63', '#5e35b1', '#3949ab', '#039be5',
+  '#43a047', '#6d4c41', '#757575', '#c2185b', '#0097a7'
+];
+
 let currentAccount = null;
 let refreshInterval = null;
 
@@ -51,9 +59,24 @@ function generatePassword() {
   return 'Px' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36).slice(-4);
 }
 
+function getAvatarColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getInitial(name) {
+  if (!name) return '?';
+  // Ambil huruf pertama dari email/nama
+  const cleaned = name.replace(/[^a-zA-Z]/g, '');
+  return (cleaned[0] || '?').toUpperCase();
+}
+
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  console.log('========== [OXY] APP START ==========');
+  console.log('========== [OXY] APP START v6 GMAIL ==========');
   setupNav();
 
   const activeEmail = localStorage.getItem(ACTIVE_KEY);
@@ -203,7 +226,6 @@ function saveCurrentAccount() {
   setTimeout(() => { if (status) status.textContent = ''; }, 2000);
 }
 
-// ===== EDIT NOTE =====
 function editNote(email) {
   const accounts = getAccounts();
   const acc = accounts.find(a => a.email === email);
@@ -216,7 +238,6 @@ function editNote(email) {
   renderSavedList();
 }
 
-// ===== RENDER DAFTAR =====
 function renderSavedList() {
   const list = document.getElementById('savedList');
   if (!list) return;
@@ -293,7 +314,34 @@ function startRefresh() {
   setTimeout(loadInbox, 1000);
 }
 
-// ===== INBOX =====
+// ===== FORMAT WAKTU GMAIL-STYLE =====
+function formatTime(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now - d;
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    if (diff < 60 * 1000) return 'Baru aja';
+    if (diff < 60 * 60 * 1000) {
+      const min = Math.floor(diff / 60000);
+      return min + ' mnt';
+    }
+    if (diff < oneDay) {
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      return h + '.' + m;
+    }
+    // Lebih dari sehari
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][d.getMonth()];
+    return day + ' ' + month;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+// ===== INBOX GMAIL-STYLE =====
 async function loadInbox() {
   if (!currentAccount) return;
   const inbox = document.getElementById('inboxList');
@@ -319,18 +367,36 @@ async function loadInbox() {
     inbox.innerHTML = msgs.map(m => {
       const subj = m.subject || '';
       const from = (m.from && m.from.address) ? m.from.address : 'Unknown';
+      const senderName = (m.from && m.from.name) ? m.from.name : from.split('@')[0];
+      const initial = getInitial(senderName);
+      const color = getAvatarColor(from);
+      const timeStr = formatTime(m.createdAt);
       const codeMatch = subj.match(/\b\d{4,8}\b/);
-      const preview = codeMatch ? 'Kode: <span class="code">' + codeMatch[0] + '</span>' : subj;
-      return '<div class="mail-item" onclick="bacaEmail(\'' + m.id + '\')">' +
-        '<div class="mail-top"><div class="mail-from">' + escapeHtml(from) + '</div>' +
-        '<div class="mail-date">' + new Date(m.createdAt).toLocaleString('id-ID') + '</div></div>' +
-        '<div class="mail-subject">' + escapeHtml(subj || '(tanpa subjek)') + '</div>' +
-        '<div class="mail-preview">' + preview + '</div></div>';
+
+      // Preview: kalau ada kode OTP, tampilin kodenya, kalau ngga tampilin subject
+      let previewText = '';
+      if (codeMatch) {
+        previewText = 'Kode verifikasi: ' + codeMatch[0];
+      } else {
+        previewText = subj;
+      }
+
+      return '<div class="gmail-item" onclick="bacaEmail(\'' + m.id + '\')">' +
+        '<div class="gmail-avatar" style="background:' + color + '">' + initial + '</div>' +
+        '<div class="gmail-content">' +
+          '<div class="gmail-row-top">' +
+            '<span class="gmail-sender">' + escapeHtml(senderName) + '</span>' +
+            '<span class="gmail-time">' + timeStr + '</span>' +
+          '</div>' +
+          '<div class="gmail-subject">' + escapeHtml(subj || '(tanpa subjek)') + '</div>' +
+          '<div class="gmail-preview">' + escapeHtml(previewText) + '</div>' +
+        '</div>' +
+      '</div>';
     }).join('');
   } catch (e) { console.error('[OXY]', e); }
 }
 
-// ===== BACA EMAIL =====
+// ===== BACA EMAIL GMAIL-STYLE =====
 async function bacaEmail(id) {
   try {
     const res = await fetch(API + 'messages/' + id, {
@@ -339,14 +405,35 @@ async function bacaEmail(id) {
     const msg = await res.json();
     const body = msg.text || (msg.html ? stripHtml(msg.html.join('')) : '') || '(kosong)';
     const from = (msg.from && msg.from.address) ? msg.from.address : 'Unknown';
+    const senderName = (msg.from && msg.from.name) ? msg.from.name : from.split('@')[0];
+    const initial = getInitial(senderName);
+    const color = getAvatarColor(from);
+    const dateStr = new Date(msg.createdAt).toLocaleString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
     const modal = document.createElement('div');
-    modal.className = 'modal';
+    modal.className = 'gmail-modal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = '<div class="modal-content"><div class="modal-handle"></div>' +
-      '<h3>' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h3>' +
-      '<div class="modal-meta">Dari: ' + escapeHtml(from) + '</div>' +
-      '<div class="modal-body">' + linkify(body) + '</div>' +
-      '<button class="modal-close" onclick="this.closest(\'.modal\').remove()">TUTUP</button></div>';
+    modal.innerHTML =
+      '<div class="gmail-modal-header">' +
+        '<button class="gmail-back" onclick="this.closest(\'.gmail-modal\').remove()">←</button>' +
+        '<div class="gmail-modal-title">Email</div>' +
+        '<button class="gmail-trash" onclick="this.closest(\'.gmail-modal\').remove()">🗑️</button>' +
+      '</div>' +
+      '<div class="gmail-modal-body">' +
+        '<h2 class="gmail-detail-subject">' + escapeHtml(msg.subject || '(tanpa subjek)') + '</h2>' +
+        '<div class="gmail-detail-sender">' +
+          '<div class="gmail-avatar gmail-avatar-lg" style="background:' + color + '">' + initial + '</div>' +
+          '<div class="gmail-detail-meta">' +
+            '<div class="gmail-detail-name">' + escapeHtml(senderName) + '</div>' +
+            '<div class="gmail-detail-email">&lt;' + escapeHtml(from) + '&gt;</div>' +
+          '</div>' +
+          '<div class="gmail-detail-date">' + dateStr + '</div>' +
+        '</div>' +
+        '<div class="gmail-detail-body">' + linkify(body) + '</div>' +
+      '</div>';
     document.body.appendChild(modal);
   } catch (e) { alert('Gagal: ' + e.message); }
 }
